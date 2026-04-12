@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script type="text/javascript" src="/homey.js" data-origin="settings"></script>
+  <style>
+    :root {
+      --bg: #f4f7f3;
+      --card: #ffffff;
+      --text: #173021;
+      --muted: #547365;
+      --accent: #2c8b57;
+      --accent-dark: #1f6d43;
+      --line: #d2e2d9;
+      --danger: #b64040;
+    }
+
+    body {
+      margin: 0;
+      background: radial-gradient(circle at top right, #dff1e6 0%, var(--bg) 50%);
+      color: var(--text);
+      font-family: "Segoe UI", sans-serif;
+      padding: 18px;
+    }
+
+    .wrap {
+      max-width: 860px;
+      margin: 0 auto;
+      display: grid;
+      gap: 14px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px;
+      box-shadow: 0 6px 20px rgba(18, 59, 36, 0.06);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 28px;
+      letter-spacing: 0.2px;
+    }
+
+    .subtitle {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .grid-2 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .grid-3 {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    input,
+    select {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 14px;
+      background: #fff;
+      color: var(--text);
+    }
+
+    .row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      border: 0;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-dark);
+    }
+
+    .btn-secondary {
+      background: #eef4f0;
+      color: var(--text);
+      border: 1px solid var(--line);
+    }
+
+    .btn-danger {
+      background: #fff0f0;
+      color: var(--danger);
+      border: 1px solid #f2cdcd;
+    }
+
+    .profile-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .profile-item {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .profile-meta {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .status {
+      background: #f0f9f3;
+      border: 1px solid #c9e8d4;
+      color: #246847;
+      border-radius: 8px;
+      padding: 10px;
+      margin-top: 12px;
+      font-size: 13px;
+      display: none;
+    }
+
+    @media (max-width: 760px) {
+      .grid-2,
+      .grid-3 {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="card">
+      <h1>PricePilot</h1>
+      <p class="subtitle">Set Nordpool region once, then manage multiple boiler profiles from one place.</p>
+    </section>
+
+    <section class="card">
+      <div class="grid grid-2">
+        <div>
+          <label for="priceSource">Price source</label>
+          <select id="priceSource">
+            <option value="nordpool_auto">Nordpool (auto planning in app)</option>
+            <option value="custom_flow">Custom flow JSON import (no Nordpool auto)</option>
+          </select>
+        </div>
+        <div>
+          <label for="areaId">Nordpool delivery area</label>
+          <select id="areaId">
+        <optgroup label="Norway">
+          <option value="NO1">NO1 – Oslo / East</option>
+          <option value="NO2">NO2 – Kristiansand / South</option>
+          <option value="NO3">NO3 – Trondheim / Middle</option>
+          <option value="NO4">NO4 – Tromsø / North</option>
+          <option value="NO5">NO5 – Bergen / West</option>
+        </optgroup>
+        <optgroup label="Sweden">
+          <option value="SE1">SE1 – Luleå</option>
+          <option value="SE2">SE2 – Sundsvall</option>
+          <option value="SE3">SE3 – Stockholm</option>
+          <option value="SE4">SE4 – Malmö</option>
+        </optgroup>
+        <optgroup label="Denmark">
+          <option value="DK1">DK1 – West</option>
+          <option value="DK2">DK2 – East</option>
+        </optgroup>
+        <optgroup label="Finland">
+          <option value="FI">FI – Finland</option>
+        </optgroup>
+        <optgroup label="Baltic states">
+          <option value="EE">EE – Estonia</option>
+          <option value="LV">LV – Latvia</option>
+          <option value="LT">LT – Lithuania</option>
+        </optgroup>
+        <optgroup label="Central / Western Europe (CWE)">
+          <option value="AT">AT – Austria</option>
+          <option value="BE">BE – Belgium</option>
+          <option value="FR">FR – France</option>
+          <option value="GER">GER – Germany</option>
+          <option value="NL">NL – Netherlands</option>
+          <option value="PL">PL – Poland</option>
+        </optgroup>
+        <optgroup label="South-Eastern Europe (SEE)">
+          <option value="BG">BG – Bulgaria</option>
+          <option value="TEL">TEL – South-Eastern Europe</option>
+        </optgroup>
+          </select>
+        </div>
+        <div>
+          <label for="currency">Currency (auto-filled by area)</label>
+          <input id="currency" type="text" maxlength="3" />
+        </div>
+        <div style="grid-column: 1 / -1;" class="profile-meta">
+          Custom flow JSON fields: <strong>startsAt</strong>, <strong>endsAt</strong>, <strong>price</strong>
+          (ISO datetime in startsAt/endsAt, numeric price).
+        </div>
+        <div class="row" style="grid-column: 1 / -1; justify-content: flex-end; margin-top: 2px;">
+          <button class="btn-primary" id="savePriceSettings" type="button">Save price settings</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="row" style="justify-content: space-between; align-items: center;">
+        <div>
+          <strong>Boiler profiles</strong>
+          <div class="subtitle" style="margin-top: 3px;">Each profile has its own plan and heating parameters.</div>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn-secondary" id="refreshRuntime">Refresh runtime info</button>
+          <button class="btn-secondary" id="addProfile">Add profile</button>
+        </div>
+      </div>
+
+      <div class="profile-list" id="profileList"></div>
+
+      <div class="card" style="margin-top: 10px; background: #f8fcf9;">
+        <div id="editModeInfo" style="display:none; margin-bottom:8px; padding:8px 10px; border:1px solid #cbe6d6; background:#eef8f1; color:#1f6d43; border-radius:8px; font-size:0.9em;"></div>
+        <div class="grid grid-2">
+          <div>
+            <label for="profileName">Profile name</label>
+            <input id="profileName" type="text" placeholder="Main boiler" />
+            <div class="profile-meta" style="margin-top:4px;">Flow ID is auto-generated from profile name.</div>
+          </div>
+          <input id="profileId" type="hidden" />
+        </div>
+
+        <div class="grid grid-3" style="margin-top: 8px;">
+          <div style="grid-column: 1 / -1;">
+            <label for="sensorFilter">Lookup temperature sensor</label>
+            <div style="display:flex; gap:8px; margin-bottom:6px;">
+              <input id="sensorFilter" type="text" placeholder="Filter by device name..." style="flex:1;" />
+              <button class="btn-secondary" id="refreshSensors" type="button" style="white-space:nowrap;">Refresh</button>
+            </div>
+            <select id="sensorLookup" size="6" style="width:100%; font-size:0.97em;">
+              <option value="">-- Refresh to load sensors --</option>
+            </select>
+            <div id="sensorCount" style="font-size:0.8em; color:#888; margin-top:3px;"></div>
+            <div id="selectedSensorInfo" style="font-size:0.85em; margin-top:6px; color:#35624a;"></div>
+          </div>
+        </div>
+
+        <input id="tempDeviceId" type="hidden" />
+        <input id="tempCapabilityId" type="hidden" value="measure_temperature" />
+        <input id="controlDeviceId" type="hidden" />
+        <input id="controlCapabilityId" type="hidden" value="onoff" />
+
+        <div class="grid grid-3" style="margin-top: 8px;">
+          <div style="grid-column: 1 / -1;">
+            <label for="controlFilter">Lookup control device</label>
+            <input id="controlFilter" type="text" placeholder="Filter control devices..." style="width:100%; margin-bottom:6px;" />
+            <select id="controlLookup" size="5" style="width:100%; font-size:0.97em;">
+              <option value="">-- Refresh to load control devices --</option>
+            </select>
+            <div id="controlCount" style="font-size:0.8em; color:#888; margin-top:3px;"></div>
+            <div id="selectedControlInfo" style="font-size:0.85em; margin-top:6px; color:#35624a;"></div>
+          </div>
+        </div>
+
+        <div class="grid grid-3" style="margin-top: 8px;">
+          <div>
+            <label for="controlMode">Control mode</label>
+            <select id="controlMode">
+              <option value="price">Smart price planning</option>
+              <option value="fixed_window">Fixed on/off time window</option>
+            </select>
+          </div>
+          <div>
+            <label for="fixedWindowStart">Fixed window start</label>
+            <input id="fixedWindowStart" type="time" value="22:00" />
+          </div>
+          <div>
+            <label for="fixedWindowEnd">Fixed window end</label>
+            <input id="fixedWindowEnd" type="time" value="06:00" />
+          </div>
+        </div>
+
+        <div class="grid grid-3" style="margin-top: 8px;">
+          <div>
+            <label for="targetTemp">Target temperature (C)</label>
+            <input id="targetTemp" type="number" min="1" step="0.1" value="70" />
+          </div>
+          <div>
+            <label for="powerW">Boiler power (W)</label>
+            <input id="powerW" type="number" min="1" step="10" value="3000" />
+          </div>
+          <div>
+            <label for="tankLiters">Tank volume (L)</label>
+            <input id="tankLiters" type="number" min="1" step="1" value="200" />
+          </div>
+        </div>
+
+        <div class="grid grid-3" style="margin-top: 8px;">
+          <div>
+            <label for="minTemp">Minimum temperature (C)</label>
+            <input id="minTemp" type="number" min="1" step="0.1" value="45" />
+          </div>
+          <div>
+            <label for="maxHours">Max hours since goal</label>
+            <input id="maxHours" type="number" min="1" step="1" value="24" />
+          </div>
+        </div>
+
+        <div class="row" style="margin-top: 10px;">
+          <button class="btn-primary" id="saveProfile">Save profile</button>
+          <button class="btn-danger" id="deleteProfile">Delete selected</button>
+          <button class="btn-secondary" id="newProfile">Clear form</button>
+        </div>
+      </div>
+
+      <div class="status" id="status"></div>
+    </section>
+  </div>
+
+  <script type="text/javascript">
+    var AREA_CURRENCIES = {
+      NO1: 'NOK', NO2: 'NOK', NO3: 'NOK', NO4: 'NOK', NO5: 'NOK',
+      SE1: 'SEK', SE2: 'SEK', SE3: 'SEK', SE4: 'SEK',
+      DK1: 'DKK', DK2: 'DKK',
+      FI: 'EUR',
+      EE: 'EUR', LV: 'EUR', LT: 'EUR',
+      AT: 'EUR', BE: 'EUR', FR: 'EUR', GER: 'EUR', NL: 'EUR', PL: 'EUR',
+      BG: 'EUR', TEL: 'EUR'
+    };
+
+    var areaSelect = document.getElementById('areaId');
+    var priceSourceSelect = document.getElementById('priceSource');
+    var currencyInput = document.getElementById('currency');
+    var profileList = document.getElementById('profileList');
+    var statusEl = document.getElementById('status');
+    var editModeInfo = document.getElementById('editModeInfo');
+    var selectedSensorInfoEl = document.getElementById('selectedSensorInfo');
+    var selectedControlInfoEl = document.getElementById('selectedControlInfo');
+
+    var form = {
+      name: document.getElementById('profileName'),
+      id: document.getElementById('profileId'),
+      sensorLookup: document.getElementById('sensorLookup'),
+      sensorFilter: document.getElementById('sensorFilter'),
+      controlLookup: document.getElementById('controlLookup'),
+      controlFilter: document.getElementById('controlFilter'),
+      refreshSensors: document.getElementById('refreshSensors'),
+      tempDeviceId: document.getElementById('tempDeviceId'),
+      tempCapabilityId: document.getElementById('tempCapabilityId'),
+      controlDeviceId: document.getElementById('controlDeviceId'),
+      controlCapabilityId: document.getElementById('controlCapabilityId'),
+      minTemp: document.getElementById('minTemp'),
+      targetTemp: document.getElementById('targetTemp'),
+      powerW: document.getElementById('powerW'),
+      tankLiters: document.getElementById('tankLiters'),
+      maxHours: document.getElementById('maxHours'),
+      controlMode: document.getElementById('controlMode'),
+      fixedWindowStart: document.getElementById('fixedWindowStart'),
+      fixedWindowEnd: document.getElementById('fixedWindowEnd')
+    };
+
+    var addProfileBtn = document.getElementById('addProfile');
+    var saveProfileBtn = document.getElementById('saveProfile');
+    var deleteProfileBtn = document.getElementById('deleteProfile');
+    var newProfileBtn = document.getElementById('newProfile');
+    var savePriceSettingsBtn = document.getElementById('savePriceSettings');
+    var refreshRuntimeBtn = document.getElementById('refreshRuntime');
+
+    var profiles = [];
+    var selectedId = null;
+    var runtimeById = {};
+    var sensorCatalog = [];
+    var sensorCatalogUpdatedAt = null;
+    var sensorCatalogError = null;
+    var controlCatalog = [];
+    var controlCatalogUpdatedAt = null;
+    var controlCatalogError = null;
+
+    function showStatus(msg, isError) {
+      statusEl.textContent = msg;
+      statusEl.style.display = 'block';
+      statusEl.style.background = isError ? '#fff3f3' : '#f0f9f3';
+      statusEl.style.borderColor = isError ? '#f0caca' : '#c9e8d4';
+      statusEl.style.color = isError ? '#9e3c3c' : '#246847';
+    }
+
+    function slugify(value) {
+      return String(value || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+    }
+
+    function defaultProfile() {
+      return {
+        id: 'boiler_main',
+        name: 'Main boiler',
+        tempDeviceId: '',
+        tempCapabilityId: 'measure_temperature',
+        controlDeviceId: '',
+        controlCapabilityId: 'onoff',
+        minTemp: 45,
+        targetTemp: 70,
+        powerW: 3000,
+        tankLiters: 200,
+        maxHoursSinceGoal: 24,
+        controlMode: 'price',
+        fixedWindowStart: '22:00',
+        fixedWindowEnd: '06:00'
+      };
+    }
+
+    function isValidTimeText(v) {
+      return /^([01]\d|2[0-3]):[0-5]\d$/.test(String(v || ''));
+    }
+
+    function updateModeUi() {
+      var fixed = form.controlMode.value === 'fixed_window';
+      [form.fixedWindowStart, form.fixedWindowEnd].forEach(function (el) {
+        el.disabled = !fixed;
+        el.style.opacity = fixed ? '1' : '0.6';
+      });
+      [form.tempDeviceId, form.tempCapabilityId, form.minTemp, form.targetTemp, form.powerW, form.tankLiters, form.maxHours].forEach(function (el) {
+        el.disabled = fixed;
+        el.style.opacity = fixed ? '0.6' : '1';
+      });
+    }
+
+    function updateEditModeInfo() {
+      if (selectedId) {
+        editModeInfo.style.display = 'block';
+        editModeInfo.textContent = 'Editing profile: ' + selectedId;
+        saveProfileBtn.textContent = 'Update profile';
+      } else {
+        editModeInfo.style.display = 'none';
+        editModeInfo.textContent = '';
+        saveProfileBtn.textContent = 'Save profile';
+      }
+    }
+
+    function updateSelectedSensorInfo() {
+      var devId = form.tempDeviceId.value || '';
+      var capId = form.tempCapabilityId.value || '';
+      if (!devId) {
+        selectedSensorInfoEl.textContent = 'Selected sensor: none';
+        return;
+      }
+      var hit = sensorCatalog.find(function (s) {
+        return s.deviceId === devId && s.capabilityId === capId;
+      });
+      if (hit) {
+        var capLabel = hit.capabilityTitle && hit.capabilityTitle !== hit.capabilityId ? hit.capabilityTitle : hit.capabilityId;
+        var valText = (hit.currentValue !== null && hit.currentValue !== undefined)
+          ? (' | Current: ' + hit.currentValue + (hit.units || '°C'))
+          : '';
+        selectedSensorInfoEl.textContent = 'Selected sensor: ' + hit.deviceName + ' · ' + capLabel + valText;
+      } else {
+        selectedSensorInfoEl.textContent = 'Selected sensor: saved device (' + devId + ')';
+      }
+    }
+
+    function updateSelectedControlInfo() {
+      var devId = form.controlDeviceId.value || '';
+      var capId = form.controlCapabilityId.value || '';
+      if (!devId) {
+        selectedControlInfoEl.textContent = 'Selected control device: none (flows only)';
+        return;
+      }
+      var hit = controlCatalog.find(function (s) {
+        return s.deviceId === devId && s.capabilityId === capId;
+      });
+      if (hit) {
+        var capLabel = hit.capabilityTitle && hit.capabilityTitle !== hit.capabilityId ? hit.capabilityTitle : hit.capabilityId;
+        var valText = (hit.currentValue !== null && hit.currentValue !== undefined)
+          ? (' | Current: ' + hit.currentValue)
+          : '';
+        selectedControlInfoEl.textContent = 'Selected control device: ' + hit.deviceName + ' · ' + capLabel + valText;
+      } else {
+        selectedControlInfoEl.textContent = 'Selected control device: saved device (' + devId + ')';
+      }
+    }
+
+    function setFormFromProfile(profile) {
+      form.name.value = profile.name;
+      form.id.value = profile.id;
+      form.tempDeviceId.value = profile.tempDeviceId || '';
+      form.tempCapabilityId.value = profile.tempCapabilityId || 'measure_temperature';
+      form.controlDeviceId.value = profile.controlDeviceId || '';
+      form.controlCapabilityId.value = profile.controlCapabilityId || 'onoff';
+      form.minTemp.value = profile.minTemp;
+      form.targetTemp.value = profile.targetTemp;
+      form.powerW.value = profile.powerW;
+      form.tankLiters.value = profile.tankLiters;
+      form.maxHours.value = profile.maxHoursSinceGoal;
+      form.controlMode.value = profile.controlMode || 'price';
+      form.fixedWindowStart.value = profile.fixedWindowStart || '22:00';
+      form.fixedWindowEnd.value = profile.fixedWindowEnd || '06:00';
+      selectedId = profile.id;
+      updateModeUi();
+      updateEditModeInfo();
+      updateSelectedSensorInfo();
+      updateSelectedControlInfo();
+    }
+
+    function clearForm() {
+      form.name.value = '';
+      form.id.value = '';
+      form.tempDeviceId.value = '';
+      form.tempCapabilityId.value = 'measure_temperature';
+      form.controlDeviceId.value = '';
+      form.controlCapabilityId.value = 'onoff';
+      form.minTemp.value = '45';
+      form.targetTemp.value = '70';
+      form.powerW.value = '3000';
+      form.tankLiters.value = '200';
+      form.maxHours.value = '24';
+      form.controlMode.value = 'price';
+      form.fixedWindowStart.value = '22:00';
+      form.fixedWindowEnd.value = '06:00';
+      selectedId = null;
+      updateModeUi();
+      updateEditModeInfo();
+      updateSelectedSensorInfo();
+      updateSelectedControlInfo();
+      renderProfiles();
+    }
+
+    function readFormProfile() {
+      var name = form.name.value.trim();
+      var id = slugify(name);
+      var tempDeviceId = form.tempDeviceId.value.trim();
+      var tempCapabilityId = form.tempCapabilityId.value.trim();
+      var controlDeviceId = form.controlDeviceId.value.trim();
+      var controlCapabilityId = form.controlCapabilityId.value.trim() || 'onoff';
+      var minTemp = Number(form.minTemp.value);
+      var targetTemp = Number(form.targetTemp.value);
+      var powerW = Number(form.powerW.value);
+      var tankLiters = Number(form.tankLiters.value);
+      var maxHoursSinceGoal = Number(form.maxHours.value);
+      var controlMode = form.controlMode.value === 'fixed_window' ? 'fixed_window' : 'price';
+      var fixedWindowStart = String(form.fixedWindowStart.value || '').trim();
+      var fixedWindowEnd = String(form.fixedWindowEnd.value || '').trim();
+
+      if (!name) throw new Error('Profile name is required.');
+      if (!id) throw new Error('Profile name must contain letters or numbers.');
+      if (controlDeviceId && !controlCapabilityId) throw new Error('Heater control capability is required when control device is set.');
+      if (controlMode === 'fixed_window') {
+        if (!isValidTimeText(fixedWindowStart)) throw new Error('Fixed window start must be HH:MM.');
+        if (!isValidTimeText(fixedWindowEnd)) throw new Error('Fixed window end must be HH:MM.');
+        if (fixedWindowStart === fixedWindowEnd) throw new Error('Fixed window start and end cannot be equal.');
+      } else {
+        if (!tempDeviceId) throw new Error('Temperature sensor device ID is required.');
+        if (!tempCapabilityId) throw new Error('Temperature capability ID is required.');
+        if (!Number.isFinite(minTemp)) throw new Error('Minimum temperature must be numeric.');
+        if (!Number.isFinite(targetTemp)) throw new Error('Target temperature must be numeric.');
+        if (targetTemp <= minTemp) throw new Error('Target temperature must be above minimum temperature.');
+        if (!Number.isFinite(powerW) || powerW <= 0) throw new Error('Boiler power must be above 0 W.');
+        if (!Number.isFinite(tankLiters) || tankLiters <= 0) throw new Error('Tank volume must be above 0 L.');
+        if (!Number.isFinite(maxHoursSinceGoal) || maxHoursSinceGoal <= 0) throw new Error('Max hours must be above 0.');
+      }
+
+      return {
+        id: id,
+        name: name,
+        tempDeviceId: tempDeviceId,
+        tempCapabilityId: tempCapabilityId,
+        controlDeviceId: controlDeviceId,
+        controlCapabilityId: controlCapabilityId,
+        minTemp: minTemp,
+        targetTemp: targetTemp,
+        powerW: powerW,
+        tankLiters: tankLiters,
+        maxHoursSinceGoal: maxHoursSinceGoal,
+        controlMode: controlMode,
+        fixedWindowStart: fixedWindowStart || '22:00',
+        fixedWindowEnd: fixedWindowEnd || '06:00'
+      };
+    }
+
+    function renderProfiles() {
+      if (!profiles.length) {
+        profileList.innerHTML = '<div class="profile-item"><div>No profiles yet. Add one to get started.</div></div>';
+        return;
+      }
+
+      profileList.innerHTML = profiles.map(function (p) {
+        var rt = runtimeById[p.id] || {};
+        var isOn = !!rt.heaterShouldBeOn;
+        var onText = isOn ? 'ON' : 'OFF';
+        var onColor = isOn ? '#1f6d43' : '#8a5a1f';
+        var hoursText = Number.isFinite(Number(rt.hoursSinceGoal)) ? Number(rt.hoursSinceGoal).toFixed(1) + 'h' : 'n/a';
+        var windowText = (rt.planWindowStart && rt.planWindowEnd)
+          ? (new Date(rt.planWindowStart).toLocaleString() + ' -> ' + new Date(rt.planWindowEnd).toLocaleString())
+          : 'No active window';
+        var modeText = p.controlMode === 'fixed_window'
+          ? ('Fixed ' + (p.fixedWindowStart || '22:00') + '-' + (p.fixedWindowEnd || '06:00'))
+          : 'Smart price';
+        var hasSensor = !!p.tempDeviceId;
+        var hasControl = !!p.controlDeviceId;
+        var controlError = rt.controlError ? String(rt.controlError) : '';
+        var controlErrorAt = rt.controlErrorAt ? new Date(rt.controlErrorAt).toLocaleString() : '';
+        var heatingRate = (p.powerW > 0 && p.tankLiters > 0)
+          ? (p.powerW / (1.163 * p.tankLiters))
+          : null;
+        var rateText = heatingRate ? heatingRate.toFixed(2) + 'C/h' : 'n/a';
+        var active = p.id === selectedId ? ' style="border-color:#2c8b57; box-shadow:0 0 0 1px #2c8b57 inset;"' : '';
+        return '' +
+          '<div class="profile-item" data-id="' + p.id + '"' + active + '>' +
+            '<div>' +
+              '<strong>' + p.name + '</strong>' +
+              '<div class="profile-meta">Flow ID: ' + p.id + ' | Mode: ' + modeText + ' | Min ' + p.minTemp + 'C | Target ' + p.targetTemp + 'C | Power ' + p.powerW + 'W | Volume ' + p.tankLiters + 'L | Rate ' + rateText + ' | Max ' + p.maxHoursSinceGoal + 'h</div>' +
+              '<div class="profile-meta">Sensor selected: ' + (hasSensor ? 'Yes' : 'No') + ' | Direct control selected: ' + (hasControl ? 'Yes' : 'No') + '</div>' +
+              '<div class="profile-meta">Hours since target: ' + hoursText + ' | Heater now: <strong style="color:' + onColor + ';">' + onText + '</strong></div>' +
+              '<div class="profile-meta">Plan window: ' + windowText + '</div>' +
+              (controlError ? '<div class="profile-meta" style="color:#9e3c3c;">Control error' + (controlErrorAt ? ' (' + controlErrorAt + ')' : '') + ': ' + controlError + '</div>' : '') +
+            '</div>' +
+            '<button class="btn-secondary" data-edit="' + p.id + '">Edit</button>' +
+          '</div>';
+      }).join('');
+    }
+
+    function loadRuntime(done) {
+      Homey.get('boilerRuntime', function (err, val) {
+        runtimeById = (!err && val && typeof val === 'object') ? val : {};
+        if (typeof done === 'function') done();
+      });
+    }
+
+    function renderSensorLookupOptions(filterText) {
+      var q = (filterText || '').trim().toLowerCase();
+      var filtered = q
+        ? sensorCatalog.filter(function (s) {
+            return (s.deviceName + ' ' + s.capabilityTitle + ' ' + s.capabilityId).toLowerCase().includes(q);
+          })
+        : sensorCatalog;
+
+      var options = [];
+      if (filtered.length === 0) {
+        options.push('<option value="" disabled>' + (sensorCatalog.length === 0 ? '-- Press Refresh to discover sensors --' : 'No match for "' + (filterText || '').replace(/</g,'&lt;') + '"') + '</option>');
+      } else {
+        filtered.forEach(function (s) {
+          var origIdx = sensorCatalog.indexOf(s);
+          var capLabel = s.capabilityTitle && s.capabilityTitle !== s.capabilityId ? s.capabilityTitle : s.capabilityId;
+          var valStr = '';
+          if (s.currentValue !== null && s.currentValue !== undefined) {
+            valStr = '  →  ' + (typeof s.currentValue === 'number' ? s.currentValue.toFixed(1) : s.currentValue) + (s.units || '°C');
+          }
+          var label = s.deviceName + '  ·  ' + capLabel + valStr;
+          options.push('<option value="' + origIdx + '">' + label + '</option>');
+        });
+      }
+      form.sensorLookup.innerHTML = options.join('');
+
+      var countEl = document.getElementById('sensorCount');
+      if (countEl) {
+        if (sensorCatalog.length === 0) {
+          countEl.textContent = '';
+        } else if (q) {
+          countEl.textContent = filtered.length + ' of ' + sensorCatalog.length + ' sensors match';
+        } else {
+          countEl.textContent = sensorCatalog.length + ' sensors found';
+        }
+      }
+    }
+
+    function loadSensorCatalog(done) {
+      Homey.get('boilerSensorCatalog', function (err, val) {
+        sensorCatalog = (!err && Array.isArray(val)) ? val : [];
+        Homey.get('boilerSensorCatalogUpdatedAt', function (err2, updatedAt) {
+          sensorCatalogUpdatedAt = (!err2 && updatedAt) ? String(updatedAt) : null;
+          Homey.get('boilerSensorCatalogError', function (err3, catalogErr) {
+            sensorCatalogError = (!err3 && catalogErr) ? String(catalogErr) : null;
+            renderSensorLookupOptions(form.sensorFilter ? form.sensorFilter.value : '');
+            updateSelectedSensorInfo();
+            if (typeof done === 'function') done();
+          });
+        });
+      });
+    }
+
+    function renderControlLookupOptions(filterText) {
+      var q = (filterText || '').trim().toLowerCase();
+      var filtered = q
+        ? controlCatalog.filter(function (s) {
+            return (s.deviceName + ' ' + s.capabilityTitle + ' ' + s.capabilityId).toLowerCase().includes(q);
+          })
+        : controlCatalog;
+
+      var options = [];
+      if (filtered.length === 0) {
+        options.push('<option value="" disabled>' + (controlCatalog.length === 0 ? '-- Press Refresh to discover control devices --' : 'No match for "' + (filterText || '').replace(/</g,'&lt;') + '"') + '</option>');
+      } else {
+        filtered.forEach(function (s) {
+          var origIdx = controlCatalog.indexOf(s);
+          var capLabel = s.capabilityTitle && s.capabilityTitle !== s.capabilityId ? s.capabilityTitle : s.capabilityId;
+          var valStr = '';
+          if (s.currentValue !== null && s.currentValue !== undefined) {
+            valStr = '  →  ' + s.currentValue;
+          }
+          options.push('<option value="' + origIdx + '">' + s.deviceName + '  ·  ' + capLabel + valStr + '</option>');
+        });
+      }
+      form.controlLookup.innerHTML = options.join('');
+
+      var countEl = document.getElementById('controlCount');
+      if (countEl) {
+        if (controlCatalog.length === 0) {
+          countEl.textContent = '';
+        } else if (q) {
+          countEl.textContent = filtered.length + ' of ' + controlCatalog.length + ' control devices match';
+        } else {
+          countEl.textContent = controlCatalog.length + ' control devices found';
+        }
+      }
+    }
+
+    function loadControlCatalog(done) {
+      Homey.get('boilerControlCatalog', function (err, val) {
+        controlCatalog = (!err && Array.isArray(val)) ? val : [];
+        Homey.get('boilerControlCatalogUpdatedAt', function (err2, updatedAt) {
+          controlCatalogUpdatedAt = (!err2 && updatedAt) ? String(updatedAt) : null;
+          Homey.get('boilerControlCatalogError', function (err3, catalogErr) {
+            controlCatalogError = (!err3 && catalogErr) ? String(catalogErr) : null;
+            renderControlLookupOptions(form.controlFilter ? form.controlFilter.value : '');
+            updateSelectedControlInfo();
+            if (typeof done === 'function') done();
+          });
+        });
+      });
+    }
+
+    areaSelect.addEventListener('change', function () {
+      var auto = AREA_CURRENCIES[areaSelect.value];
+      if (auto) currencyInput.value = auto;
+    });
+
+    form.name.addEventListener('input', function () {
+      form.id.value = slugify(form.name.value);
+    });
+
+    form.controlMode.addEventListener('change', updateModeUi);
+
+    form.sensorFilter.addEventListener('input', function () {
+      renderSensorLookupOptions(form.sensorFilter.value);
+    });
+
+    form.controlFilter.addEventListener('input', function () {
+      renderControlLookupOptions(form.controlFilter.value);
+    });
+
+    form.sensorLookup.addEventListener('change', function () {      var idx = Number(form.sensorLookup.value);
+      if (!Number.isInteger(idx) || idx < 0 || idx >= sensorCatalog.length) return;
+      var picked = sensorCatalog[idx];
+      form.tempDeviceId.value = picked.deviceId;
+      form.tempCapabilityId.value = picked.capabilityId;
+      updateSelectedSensorInfo();
+    });
+
+    form.controlLookup.addEventListener('change', function () {
+      var idx = Number(form.controlLookup.value);
+      if (!Number.isInteger(idx) || idx < 0 || idx >= controlCatalog.length) return;
+      var picked = controlCatalog[idx];
+      form.controlDeviceId.value = picked.deviceId;
+      form.controlCapabilityId.value = picked.capabilityId;
+      updateSelectedControlInfo();
+    });
+
+    form.refreshSensors.addEventListener('click', function () {
+      Homey.set('boilerSensorCatalogRefreshRequest', Date.now(), function (err) {
+        if (err) return showStatus(String(err), true);
+        setTimeout(function () {
+          loadSensorCatalog(function () {
+            loadControlCatalog(function () {
+              if (sensorCatalogError || controlCatalogError) {
+                showStatus('Catalog refresh failed: ' + (sensorCatalogError || controlCatalogError), true);
+                return;
+              }
+              var suffix = sensorCatalogUpdatedAt ? ' (updated ' + new Date(sensorCatalogUpdatedAt).toLocaleString() + ')' : '';
+              showStatus('Catalogs refreshed. Sensors: ' + sensorCatalog.length + ', controls: ' + controlCatalog.length + suffix + '.', false);
+            });
+          });
+        }, 1200);
+      });
+    });
+
+    addProfileBtn.addEventListener('click', function () {
+      clearForm();
+      form.name.focus();
+    });
+
+    function persistProfiles(done) {
+      Homey.set('boilerProfiles', profiles, function (err) {
+        if (err) return showStatus(String(err), true);
+        if (typeof done === 'function') done();
+      });
+    }
+
+    function persistPriceSettings(done) {
+      var area = areaSelect.value;
+      var cur = currencyInput.value.trim().toUpperCase();
+      var source = priceSourceSelect.value === 'custom_flow' ? 'custom_flow' : 'nordpool_auto';
+
+      if (source === 'nordpool_auto') {
+        if (!area) return showStatus('Please select a delivery area.', true);
+        if (!cur || cur.length !== 3) return showStatus('Currency must be a 3-letter code.', true);
+      }
+
+      Homey.set('priceSource', source, function (err) {
+        if (err) return showStatus(String(err), true);
+        Homey.set('areaId', area || '', function (err2) {
+          if (err2) return showStatus(String(err2), true);
+          Homey.set('currency', cur || '', function (err3) {
+            if (err3) return showStatus(String(err3), true);
+            if (typeof done === 'function') done(source);
+          });
+        });
+      });
+    }
+
+    newProfileBtn.addEventListener('click', function () {
+      clearForm();
+    });
+
+    saveProfileBtn.addEventListener('click', function () {
+      try {
+        var next = readFormProfile();
+        var sameNameIndex = profiles.findIndex(function (p) { return p.name.toLowerCase() === next.name.toLowerCase(); });
+        var sameIdIndex = profiles.findIndex(function (p) { return p.id === next.id; });
+        var selectedIndex = selectedId ? profiles.findIndex(function (p) { return p.id === selectedId; }) : -1;
+
+        if (selectedIndex >= 0) {
+          if (sameNameIndex >= 0 && sameNameIndex !== selectedIndex) {
+            throw new Error('A profile with this name already exists.');
+          }
+          if (sameIdIndex >= 0 && sameIdIndex !== selectedIndex) {
+            throw new Error('Another profile already uses this flow ID (derived from name).');
+          }
+          profiles[selectedIndex] = next;
+        } else {
+          if (sameNameIndex >= 0) throw new Error('A profile with this name already exists.');
+          if (sameIdIndex >= 0) throw new Error('A profile with this flow ID already exists (name collision).');
+          profiles.push(next);
+        }
+
+        selectedId = next.id;
+        renderProfiles();
+        persistProfiles(function () {
+          showStatus('Profile saved.', false);
+        });
+      } catch (err) {
+        showStatus(err.message, true);
+      }
+    });
+
+    deleteProfileBtn.addEventListener('click', function () {
+      if (!selectedId) {
+        return showStatus('Select a profile to delete.', true);
+      }
+      profiles = profiles.filter(function (p) { return p.id !== selectedId; });
+      if (!profiles.length) {
+        profiles.push(defaultProfile());
+      }
+      setFormFromProfile(profiles[0]);
+      renderProfiles();
+      persistProfiles(function () {
+        showStatus('Profile deleted.', false);
+      });
+    });
+
+    profileList.addEventListener('click', function (ev) {
+      var btn = ev.target.closest('button[data-edit]');
+      if (!btn) return;
+      var id = btn.getAttribute('data-edit');
+      var profile = profiles.find(function (p) { return p.id === id; });
+      if (!profile) return;
+      setFormFromProfile(profile);
+      renderProfiles();
+    });
+
+    refreshRuntimeBtn.addEventListener('click', function () {
+      loadRuntime(function () {
+        renderProfiles();
+        var errors = Object.keys(runtimeById || {}).filter(function (id) {
+          var rt = runtimeById[id];
+          return rt && rt.controlError;
+        });
+        if (errors.length) {
+          showStatus('Runtime refreshed with ' + errors.length + ' control error(s). See profile cards for details.', true);
+        } else {
+          showStatus('Runtime info refreshed.', false);
+        }
+      });
+    });
+
+    savePriceSettingsBtn.addEventListener('click', function () {
+      persistPriceSettings(function (source) {
+        if (source === 'custom_flow') {
+          showStatus('Saved: custom flow price import enabled, Nordpool auto planning disabled.', false);
+          return;
+        }
+        showStatus('Saved: Nordpool source, area and currency.', false);
+      });
+    });
+
+    function onHomeyReady(Homey) {
+      Homey.ready();
+
+      Homey.get('priceSource', function (srcErr, srcVal) {
+        if (!srcErr && srcVal === 'custom_flow') {
+          priceSourceSelect.value = 'custom_flow';
+          return;
+        }
+        priceSourceSelect.value = 'nordpool_auto';
+      });
+
+      Homey.get('areaId', function (err, val) {
+        if (!err && val) {
+          areaSelect.value = val;
+        }
+
+        Homey.get('currency', function (err2, val2) {
+          if (!err2 && val2) {
+            currencyInput.value = val2;
+          } else {
+            currencyInput.value = AREA_CURRENCIES[areaSelect.value] || 'EUR';
+          }
+
+          Homey.get('boilerProfiles', function (err3, rawProfiles) {
+            if (!err3 && Array.isArray(rawProfiles) && rawProfiles.length) {
+              profiles = rawProfiles
+                .map(function (p) {
+                  return {
+                    id: slugify(p.id),
+                    name: String(p.name || p.id || '').trim() || slugify(p.id),
+                    tempDeviceId: String(p.tempDeviceId || '').trim(),
+                    tempCapabilityId: String(p.tempCapabilityId || '').trim() || 'measure_temperature',
+                    controlDeviceId: String(p.controlDeviceId || '').trim(),
+                    controlCapabilityId: String(p.controlCapabilityId || '').trim() || 'onoff',
+                    minTemp: Number(p.minTemp),
+                    targetTemp: Number(p.targetTemp),
+                    powerW: Number(p.powerW),
+                    tankLiters: Number(p.tankLiters),
+                    maxHoursSinceGoal: Number(p.maxHoursSinceGoal),
+                    controlMode: p.controlMode === 'fixed_window' ? 'fixed_window' : 'price',
+                    fixedWindowStart: isValidTimeText(p.fixedWindowStart) ? p.fixedWindowStart : '22:00',
+                    fixedWindowEnd: isValidTimeText(p.fixedWindowEnd) ? p.fixedWindowEnd : '06:00'
+                  };
+                })
+                .filter(function (p) {
+                  if (!p.id) return false;
+                  if (p.controlMode === 'fixed_window') {
+                    return isValidTimeText(p.fixedWindowStart) && isValidTimeText(p.fixedWindowEnd) && p.fixedWindowStart !== p.fixedWindowEnd;
+                  }
+                  return p.tempDeviceId && p.tempCapabilityId && Number.isFinite(p.minTemp) && Number.isFinite(p.targetTemp) && p.targetTemp > p.minTemp && Number.isFinite(p.powerW) && p.powerW > 0 && Number.isFinite(p.tankLiters) && p.tankLiters > 0 && Number.isFinite(p.maxHoursSinceGoal) && p.maxHoursSinceGoal > 0;
+                });
+
+              var unique = {};
+              profiles = profiles.filter(function (p) {
+                if (unique[p.id]) return false;
+                unique[p.id] = true;
+                return true;
+              });
+            }
+
+            if (!profiles.length) {
+              profiles = [defaultProfile()];
+            }
+
+            loadRuntime(function () {
+              loadSensorCatalog(function () {
+                loadControlCatalog(function () {
+                  setFormFromProfile(profiles[0]);
+                  renderProfiles();
+                  if (sensorCatalogError || controlCatalogError) {
+                    showStatus('Loaded ' + profiles.length + ' profile(s). Catalog error: ' + (sensorCatalogError || controlCatalogError), true);
+                  } else {
+                    var errors = Object.keys(runtimeById || {}).filter(function (id) {
+                      var rt = runtimeById[id];
+                      return rt && rt.controlError;
+                    });
+                    if (errors.length) {
+                      showStatus('Loaded ' + profiles.length + ' profile(s), ' + sensorCatalog.length + ' sensors, ' + controlCatalog.length + ' control entries, and ' + errors.length + ' control error(s).', true);
+                    } else {
+                      showStatus('Loaded ' + profiles.length + ' profile(s), ' + sensorCatalog.length + ' sensors and ' + controlCatalog.length + ' control entries.', false);
+                    }
+                  }
+                });
+              });
+            });
+          });
+        });
+      });
+    }
+  </script>
+
+</body>
+</html>

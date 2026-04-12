@@ -1,0 +1,9 @@
+{
+  "id": "heating_should_be_on",
+  "title": { "en": "![profile_id] heater should be ON|![profile_id] heater should be OFF" },
+  "titleFormatted": { "en": "[[profile_id]] heater should be ON|Heater should be OFF" },
+  "hint": { "en": "Boolean condition: true when PricePilot currently decides the selected profile should be ON." },
+  "args": [
+    { "type": "autocomplete", "name": "profile_id", "title": { "en": "Boiler profile" } }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "name": "app.l4m.pricePilot",
+  "version": "1.0.0",
+  "main": "app.js",
+  "scripts": {},
+  "dependencies": {
+    "homey-api": "*"
+  }
+}

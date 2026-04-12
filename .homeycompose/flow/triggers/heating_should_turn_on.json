@@ -1,0 +1,15 @@
+{
+  "id": "heating_should_turn_on",
+  "title": { "en": "Heating should turn ON for [[profile_id]]" },
+  "titleFormatted": { "en": "Heating should turn ON for [[profile_id]]" },
+  "hint": { "en": "Triggers when PricePilot determines heating should now be ON for the selected boiler profile." },
+  "args": [
+    { "type": "autocomplete", "name": "profile_id", "title": { "en": "Boiler profile" } }
+  ],
+  "tokens": [
+    { "name": "profile_id", "type": "string", "title": { "en": "Profile ID" } },
+    { "name": "profile_name", "type": "string", "title": { "en": "Profile name" } },
+    { "name": "should_heat", "type": "boolean", "title": { "en": "Should heat now" } },
+    { "name": "source", "type": "string", "title": { "en": "Trigger source" } }
+  ]
+}

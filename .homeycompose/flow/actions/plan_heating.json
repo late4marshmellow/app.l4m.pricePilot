@@ -1,0 +1,13 @@
+{
+  "id": "plan_heating",
+  "title": { "en": "Plan heating with custom prices" },
+  "titleFormatted": { "en": "Plan heating for [[profile_id]] with custom prices [[price_slots]]" },
+  "hint": { "en": "Like 'Fetch Nordpool prices and plan heating', but you supply the price slots as JSON. Use this when your prices come from another app/flow source. Required fields per slot: startsAt (ISO date+time), endsAt (ISO date+time), price (number)." },
+  "args": [
+    { "type": "autocomplete", "name": "profile_id", "title": { "en": "Boiler profile" } },
+    { "type": "text",   "name": "price_slots",     "title": { "en": "Price slots (JSON)" },                   "placeholder": { "en": "[{\"startsAt\":\"2026-04-12T10:00:00Z\",\"endsAt\":\"2026-04-12T11:00:00Z\",\"price\":0.12}]" } }
+  ],
+  "tokens": [
+    { "name": "should_heat", "type": "boolean", "title": { "en": "Should heat now" } }
+  ]
+}

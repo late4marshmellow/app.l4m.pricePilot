@@ -1,0 +1,9 @@
+{
+  "id": "heating_scheduled_now",
+  "title": { "en": "![profile_id] heating is scheduled now|![profile_id] heating is !not! scheduled now" },
+  "titleFormatted": { "en": "[[profile_id]] heating is scheduled now|Heating is not scheduled now" },
+  "hint": { "en": "True if the current time is within the stored heating window for the selected boiler profile." },
+  "args": [
+    { "type": "autocomplete", "name": "profile_id", "title": { "en": "Boiler profile" } }
+  ]
+}

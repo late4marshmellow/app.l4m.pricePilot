@@ -1,0 +1,31 @@
+{
+  "id": "app.l4m.pricePilot",
+  "version": "1.0.0",
+  "compatibility": ">=5.0.0",
+  "sdk": 3,
+  "platforms": [
+    "local"
+  ],
+  "name": {
+    "en": "PricePilot"
+  },
+  "description": {
+    "en": "Automatically heat your water boiler during the cheapest electricity hours. Saves money and energy by finding optimal heating windows based on live electricity prices. Includes fixed-window mode and direct boiler control."
+  },
+  "category": [
+    "energy"
+  ],
+  "permissions": [
+    "homey:manager:api"
+  ],
+  "images": {
+    "small": "/assets/images/small.png",
+    "large": "/assets/images/large.png",
+    "xlarge": "/assets/images/xlarge.png"
+  },
+  "author": {
+    "name": "Alejandro Carido-Marcussen",
+    "email": "alncm@tutanota.com"
+  },
+  "brandColor": "#1a7fc1"
+}
