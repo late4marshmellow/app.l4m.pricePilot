@@ -16,9 +16,6 @@ Given a list of upcoming electricity price slots (e.g. from the Tibber or Nordpo
 - **Plan heating** *(input: price_slots JSON → token: should_heat)*
   Pass a JSON array of price slots. Finds the optimal window and returns `true` if it's time to heat right now.
 
-- **Clear heating plan**
-  Resets the plan to idle (useful when the boiler is manually controlled).
-
 ### Conditions
 - **Heating is scheduled now**
   Returns `true` if the current time is within the stored heating window. Use this to gate your boiler on/off flow.
@@ -68,7 +65,7 @@ const DEVICE_VALUE_CONFIGS = {
 ## Suggested flow setup
 
 **Flow A — Plan (runs every 15 min):**
-> Trigger: Every 15 minutes → Action: **Plan heating** (price slots from Nordpool/Tibber)
+> Trigger: Every 15 minutes → Action: **Plan heating** (with your custom price_slots JSON source)
 
 **Flow B — Heat on/off:**
 > Trigger: Every 5 minutes → Condition: **Heating is scheduled now** → Then: turn boiler ON / Else: turn boiler OFF

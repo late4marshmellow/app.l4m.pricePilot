@@ -4,6 +4,11 @@ const Homey = require('homey');
 const { HomeyAPI } = require('homey-api');
 const { fetchPriceSlots } = require('./lib/NordpoolClient');
 
+const OSLO_TZ = 'Europe/Oslo';
+const NORDPOOL_PUBLISH_HOUR_OSLO = 13;
+const NORDPOOL_PUBLISH_GRACE_MINUTES = 20;
+const NORDPOOL_MAX_CACHE_AGE_HOURS = 36;
+
 module.exports = class PricePilotApp extends Homey.App {
 
   async onInit() {
@@ -18,6 +23,13 @@ module.exports = class PricePilotApp extends Homey.App {
         this.log('Sensor catalog refresh requested from settings UI');
         this._refreshSensorCatalog().catch((err) => {
           this.error('Failed to refresh temperature sensor catalog on-demand:', err.message);
+        });
+      }
+
+      if (key === 'nordpoolDebugRefreshRequest') {
+        this.log('Nordpool debug refresh requested from settings UI');
+        this._fetchNordpoolForDebug().catch((err) => {
+          this.error('Failed Nordpool debug fetch on-demand:', err.message);
         });
       }
 
@@ -38,10 +50,7 @@ module.exports = class PricePilotApp extends Homey.App {
     }, 15 * 60 * 1000);
 
     const planCard = this.homey.flow.getActionCard('plan_heating');
-    const fetchCard = this.homey.flow.getActionCard('fetch_and_plan_heating');
-    const clearCard = this.homey.flow.getActionCard('clear_heating_plan');
     const conditionCard = this.homey.flow.getConditionCard('heating_scheduled_now');
-    const shouldBeOnConditionCard = this.homey.flow.getConditionCard('heating_should_be_on');
     const whenOnCard = this.homey.flow.getTriggerCard('heating_should_turn_on');
     const whenOffCard = this.homey.flow.getTriggerCard('heating_should_turn_off');
 
@@ -49,10 +58,7 @@ module.exports = class PricePilotApp extends Homey.App {
     this.heatingShouldTurnOffCard = whenOffCard;
 
     this._registerProfileAutocomplete(planCard);
-    this._registerProfileAutocomplete(fetchCard);
-    this._registerProfileAutocomplete(clearCard);
     this._registerProfileAutocomplete(conditionCard);
-    this._registerProfileAutocomplete(shouldBeOnConditionCard);
     this._registerProfileAutocomplete(whenOnCard);
     this._registerProfileAutocomplete(whenOffCard);
 
@@ -88,46 +94,8 @@ module.exports = class PricePilotApp extends Homey.App {
       return { should_heat: shouldHeat };
     });
 
-    // --- Action: Fetch Nordpool prices and plan heating ---
-    fetchCard.registerRunListener(async (args) => {
-      const area     = (this.homey.settings.get('areaId') || '').trim();
-      const currency = (this.homey.settings.get('currency') || '').trim();
-      if (!area || !currency) {
-        throw new Error('PricePilot: delivery area and currency are not configured — open app settings first');
-      }
-      const priceSlots = await fetchPriceSlots(area, currency);
-
-      const profile = this._requireProfileFromArg(args.profile_id);
-      const shouldHeat = await this._planHeating(
-        profile,
-        priceSlots
-      );
-      this._syncHeatingStateAndTrigger(profile.id, 'manual:fetch_and_plan_heating');
-      return { should_heat: shouldHeat };
-    });
-
-    // --- Action: Clear heating plan ---
-    clearCard.registerRunListener(async (args) => {
-      const profile = this._requireProfileFromArg(args.profile_id);
-      this._setPlan(profile.id, 'idle', null, null);
-      this._patchRuntime(profile.id, {
-        planState: 'idle',
-        planWindowStart: null,
-        planWindowEnd: null,
-        heaterShouldBeOn: false,
-        updatedAt: new Date().toISOString(),
-      });
-      this._syncHeatingStateAndTrigger(profile.id, 'manual:clear_heating_plan');
-      this.log(`Plan "${profile.id}" cleared`);
-    });
-
     // --- Condition: Heating is scheduled now ---
     conditionCard.registerRunListener(async (args) => {
-      const profile = this._requireProfileFromArg(args.profile_id);
-      return this._isHeatingNow(profile.id);
-    });
-
-    shouldBeOnConditionCard.registerRunListener(async (args) => {
       const profile = this._requireProfileFromArg(args.profile_id);
       return this._isHeatingNow(profile.id);
     });
@@ -183,10 +151,16 @@ module.exports = class PricePilotApp extends Homey.App {
             continue;
           }
 
-          if (!this._cachedAutoPriceSlots || this._cachedAutoPriceArea !== area || this._cachedAutoPriceCurrency !== currency) {
-            this._cachedAutoPriceSlots = await fetchPriceSlots(area, currency);
-            this._cachedAutoPriceArea = area;
-            this._cachedAutoPriceCurrency = currency;
+          if (this._shouldRefreshNordpoolCache(area, currency)) {
+            try {
+              this._cachedAutoPriceSlots = await fetchPriceSlots(area, currency);
+              this._cachedAutoPriceArea = area;
+              this._cachedAutoPriceCurrency = currency;
+              this._storeNordpoolFetchSnapshot(area, currency, this._cachedAutoPriceSlots);
+            } catch (err) {
+              this._storeNordpoolFetchError(area, currency, err);
+              throw err;
+            }
           }
 
           await this._planHeating(profile, this._cachedAutoPriceSlots);
@@ -552,6 +526,33 @@ module.exports = class PricePilotApp extends Homey.App {
   }
 
   _isHeatingNow(planId) {
+    const profile = this._getProfiles().find((p) => p.id === this._sanitizeProfileId(planId));
+    if (profile && profile.controlMode === 'fixed_window') {
+      const now = new Date();
+      const runtime = this._getRuntime(planId) || {};
+      const plan = this._readPlan(planId);
+      const inMinTempOverride = !!runtime.fixedMinTempTriggered
+        && plan.state === 'planned'
+        && plan.start
+        && plan.end
+        && now >= plan.start
+        && now < plan.end;
+
+      const fixed = this._computeFixedWindow(profile.fixedWindowStart, profile.fixedWindowEnd, now);
+      const on = inMinTempOverride || fixed.isOn;
+
+      this._patchRuntime(planId, {
+        planState: 'planned',
+        fixedWindowStart: profile.fixedWindowStart,
+        fixedWindowEnd: profile.fixedWindowEnd,
+        fixedMinTempTriggered: inMinTempOverride,
+        heaterShouldBeOn: on,
+        updatedAt: now.toISOString(),
+      });
+
+      return on;
+    }
+
     const plan = this._readPlan(planId);
     if (plan.state !== 'planned' || !plan.start || !plan.end) {
       this._patchRuntime(planId, {
@@ -765,14 +766,15 @@ module.exports = class PricePilotApp extends Homey.App {
 
     const startMin = this._clockToMinutes(startHHMM);
     const endMin = this._clockToMinutes(endHHMM);
+    const nowLocalMin = this._clockMinutesInAppTimeZone(now);
     const todayStart = this._atClockTime(now, startHHMM);
     const todayEnd = this._atClockTime(now, endHHMM);
 
     if (endMin > startMin) {
-      if (now >= todayStart && now < todayEnd) {
+      if (nowLocalMin >= startMin && nowLocalMin < endMin) {
         return { start: todayStart, end: todayEnd, isOn: true };
       }
-      if (now < todayStart) {
+      if (nowLocalMin < startMin) {
         return { start: todayStart, end: todayEnd, isOn: false };
       }
       const nextStart = new Date(todayStart.getTime());
@@ -785,15 +787,44 @@ module.exports = class PricePilotApp extends Homey.App {
     // Overnight window, e.g. 22:00 -> 06:00
     const tomorrowEnd = new Date(todayEnd.getTime());
     tomorrowEnd.setDate(tomorrowEnd.getDate() + 1);
-    if (now >= todayStart) {
+    if (nowLocalMin >= startMin) {
       return { start: todayStart, end: tomorrowEnd, isOn: true };
     }
-    if (now < todayEnd) {
+    if (nowLocalMin < endMin) {
       const yesterdayStart = new Date(todayStart.getTime());
       yesterdayStart.setDate(yesterdayStart.getDate() - 1);
       return { start: yesterdayStart, end: todayEnd, isOn: true };
     }
     return { start: todayStart, end: tomorrowEnd, isOn: false };
+  }
+
+  _getAppTimeZone() {
+    try {
+      if (this.homey && this.homey.clock && typeof this.homey.clock.getTimezone === 'function') {
+        const tz = this.homey.clock.getTimezone();
+        if (tz && typeof tz === 'string') return tz;
+      }
+    } catch (err) {
+      // Fall back to Oslo if timezone API is unavailable.
+    }
+    return OSLO_TZ;
+  }
+
+  _clockMinutesInAppTimeZone(date) {
+    const tz = this._getAppTimeZone();
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: tz,
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    }).formatToParts(date);
+
+    const get = (type) => {
+      const part = parts.find((p) => p.type === type);
+      return part ? Number(part.value) : 0;
+    };
+
+    return get('hour') * 60 + get('minute');
   }
 
   _computeHoursSinceGoal(planId, currentTemp, targetTemp, maxHoursSinceGoal) {
@@ -988,6 +1019,125 @@ module.exports = class PricePilotApp extends Homey.App {
       this.homey.settings.set('boilerControlCatalogError', err.message || String(err));
       throw err;
     }
+  }
+
+  _storeNordpoolFetchSnapshot(area, currency, slots) {
+    const fetchedAt = new Date().toISOString();
+    const payload = {
+      fetchedAt,
+      area: String(area || ''),
+      currency: String(currency || ''),
+      count: Array.isArray(slots) ? slots.length : 0,
+      slots: Array.isArray(slots) ? slots : [],
+    };
+    this._cachedAutoFetchedAt = fetchedAt;
+    this.homey.settings.set('nordpoolLastFetch', payload);
+    this.homey.settings.set('nordpoolLastFetchError', null);
+  }
+
+  _storeNordpoolFetchError(area, currency, err) {
+    this.homey.settings.set('nordpoolLastFetchError', {
+      at: new Date().toISOString(),
+      area: String(area || ''),
+      currency: String(currency || ''),
+      message: err && err.message ? String(err.message) : String(err),
+    });
+  }
+
+  async _fetchNordpoolForDebug() {
+    const area = (this.homey.settings.get('areaId') || '').trim();
+    const currency = (this.homey.settings.get('currency') || '').trim();
+
+    if (!area || !currency) {
+      this._storeNordpoolFetchError(area, currency, new Error('Area and currency must be configured before fetching Nordpool prices.'));
+      return;
+    }
+
+    try {
+      const slots = await fetchPriceSlots(area, currency);
+      this._cachedAutoPriceSlots = slots;
+      this._cachedAutoPriceArea = area;
+      this._cachedAutoPriceCurrency = currency;
+      this._storeNordpoolFetchSnapshot(area, currency, slots);
+    } catch (err) {
+      this._storeNordpoolFetchError(area, currency, err);
+      throw err;
+    }
+  }
+
+  _shouldRefreshNordpoolCache(area, currency) {
+    if (this._cachedAutoPriceArea !== area || this._cachedAutoPriceCurrency !== currency) {
+      return true;
+    }
+
+    if (!Array.isArray(this._cachedAutoPriceSlots) || this._cachedAutoPriceSlots.length === 0) {
+      const snapshot = this.homey.settings.get('nordpoolLastFetch');
+      const canReuseSnapshot = snapshot
+        && snapshot.area === area
+        && snapshot.currency === currency
+        && Array.isArray(snapshot.slots)
+        && snapshot.slots.length > 0;
+
+      if (canReuseSnapshot) {
+        this._cachedAutoPriceSlots = snapshot.slots;
+        this._cachedAutoPriceArea = area;
+        this._cachedAutoPriceCurrency = currency;
+        this._cachedAutoFetchedAt = snapshot.fetchedAt || null;
+      } else {
+        return true;
+      }
+    }
+
+    const fetchedAt = this._cachedAutoFetchedAt || (this.homey.settings.get('nordpoolLastFetch') || {}).fetchedAt;
+    const fetchedDate = fetchedAt ? new Date(fetchedAt) : null;
+    if (!fetchedDate || isNaN(fetchedDate.getTime())) {
+      return true;
+    }
+
+    const ageHours = (Date.now() - fetchedDate.getTime()) / 3600000;
+    if (!Number.isFinite(ageHours) || ageHours >= NORDPOOL_MAX_CACHE_AGE_HOURS) {
+      return true;
+    }
+
+    // Daily refresh after the Nordpool publish window in Oslo time.
+    const nowParts = this._getOsloDateParts(new Date());
+    const fetchedParts = this._getOsloDateParts(fetchedDate);
+    const nowAfterPublishWindow =
+      nowParts.hour > NORDPOOL_PUBLISH_HOUR_OSLO
+      || (nowParts.hour === NORDPOOL_PUBLISH_HOUR_OSLO && nowParts.minute >= NORDPOOL_PUBLISH_GRACE_MINUTES);
+
+    const fetchedDay = `${fetchedParts.year}-${fetchedParts.month}-${fetchedParts.day}`;
+    const today = `${nowParts.year}-${nowParts.month}-${nowParts.day}`;
+    if (nowAfterPublishWindow && fetchedDay !== today) {
+      return true;
+    }
+
+    return false;
+  }
+
+  _getOsloDateParts(date) {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: OSLO_TZ,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    }).formatToParts(date);
+
+    const get = (type) => {
+      const part = parts.find((p) => p.type === type);
+      return part ? Number(part.value) : 0;
+    };
+
+    return {
+      year: get('year'),
+      month: String(get('month')).padStart(2, '0'),
+      day: String(get('day')).padStart(2, '0'),
+      hour: get('hour'),
+      minute: get('minute'),
+    };
   }
 
 };

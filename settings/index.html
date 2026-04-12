@@ -150,6 +150,44 @@
       display: none;
     }
 
+    .tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .tab-btn {
+      transition: all 0.16s ease;
+      border: 1px solid var(--line);
+    }
+
+    .tab-btn:hover {
+      background: #e4f1e8;
+      border-color: #b6d8c1;
+    }
+
+    .tab-btn.active {
+      background: #1f8f54;
+      color: #fff;
+      border-color: #0f6f3e;
+      box-shadow: 0 0 0 3px rgba(31, 143, 84, 0.45), 0 0 0 1px rgba(10, 40, 24, 0.22) inset;
+      transform: translateY(-1px);
+      font-weight: 700;
+    }
+
+    .debug-box {
+      margin-top: 10px;
+      background: #eef8f1;
+      border: 1px solid #cbe6d6;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 12px;
+      white-space: pre-wrap;
+      max-height: 420px;
+      overflow: auto;
+      color: #1f6d43;
+    }
+
     @media (max-width: 760px) {
       .grid-2,
       .grid-3 {
@@ -166,6 +204,14 @@
     </section>
 
     <section class="card">
+      <div class="tabs">
+        <button class="btn-secondary tab-btn active" id="tabPriceSettings" type="button">Price Source</button>
+        <button class="btn-secondary tab-btn" id="tabProfiles" type="button">Profiles</button>
+        <button class="btn-secondary tab-btn" id="tabNordpool" type="button">Nordpool debug</button>
+      </div>
+    </section>
+
+    <section class="card" id="pagePriceSettings">
       <div class="grid grid-2">
         <div>
           <label for="priceSource">Price source</label>
@@ -225,12 +271,12 @@
           (ISO datetime in startsAt/endsAt, numeric price).
         </div>
         <div class="row" style="grid-column: 1 / -1; justify-content: flex-end; margin-top: 2px;">
-          <button class="btn-primary" id="savePriceSettings" type="button">Save price settings</button>
+          <button class="btn-primary" id="savePriceSettings" type="button">Save Price Source</button>
         </div>
       </div>
     </section>
 
-    <section class="card">
+    <section class="card" id="pageProfiles">
       <div class="row" style="justify-content: space-between; align-items: center;">
         <div>
           <strong>Boiler profiles</strong>
@@ -350,6 +396,22 @@
 
       <div class="status" id="status"></div>
     </section>
+
+    <section class="card" id="pageNordpool" style="display:none;">
+      <div class="row" style="justify-content: space-between; align-items: center;">
+        <div>
+          <strong>Nordpool last fetched prices</strong>
+          <div class="subtitle" style="margin-top: 3px;">Read-only snapshot from internal app fetch logic.</div>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn-secondary" id="refreshNordpoolDebug" type="button">Refresh</button>
+        </div>
+      </div>
+      <div id="nordpoolMeta" class="profile-meta" style="margin-top:8px;"></div>
+      <div id="nordpoolError" class="profile-meta" style="margin-top:6px; color:#9e3c3c;"></div>
+      <div id="nordpoolDebug" class="debug-box">No fetch snapshot available yet.
+</div>
+    </section>
   </div>
 
   <script type="text/javascript">
@@ -368,6 +430,15 @@
     var currencyInput = document.getElementById('currency');
     var profileList = document.getElementById('profileList');
     var statusEl = document.getElementById('status');
+    var tabPriceSettingsBtn = document.getElementById('tabPriceSettings');
+    var tabProfilesBtn = document.getElementById('tabProfiles');
+    var tabNordpoolBtn = document.getElementById('tabNordpool');
+    var pagePriceSettings = document.getElementById('pagePriceSettings');
+    var pageProfiles = document.getElementById('pageProfiles');
+    var pageNordpool = document.getElementById('pageNordpool');
+    var nordpoolMetaEl = document.getElementById('nordpoolMeta');
+    var nordpoolErrorEl = document.getElementById('nordpoolError');
+    var nordpoolDebugEl = document.getElementById('nordpoolDebug');
     var editModeInfo = document.getElementById('editModeInfo');
     var selectedSensorInfoEl = document.getElementById('selectedSensorInfo');
     var selectedControlInfoEl = document.getElementById('selectedControlInfo');
@@ -401,6 +472,7 @@
     var newProfileBtn = document.getElementById('newProfile');
     var savePriceSettingsBtn = document.getElementById('savePriceSettings');
     var refreshRuntimeBtn = document.getElementById('refreshRuntime');
+    var refreshNordpoolDebugBtn = document.getElementById('refreshNordpoolDebug');
 
     var profiles = [];
     var selectedId = null;
@@ -418,6 +490,59 @@
       statusEl.style.background = isError ? '#fff3f3' : '#f0f9f3';
       statusEl.style.borderColor = isError ? '#f0caca' : '#c9e8d4';
       statusEl.style.color = isError ? '#9e3c3c' : '#246847';
+    }
+
+    function setPage(page) {
+      var showPrice = page === 'price';
+      var showProfiles = page === 'profiles';
+      var showNordpool = page === 'nordpool';
+
+      pagePriceSettings.style.display = showPrice ? 'block' : 'none';
+      pageProfiles.style.display = showProfiles ? 'block' : 'none';
+      pageNordpool.style.display = showNordpool ? 'block' : 'none';
+
+      tabPriceSettingsBtn.classList.toggle('active', showPrice);
+      tabProfilesBtn.classList.toggle('active', showProfiles);
+      tabNordpoolBtn.classList.toggle('active', showNordpool);
+
+      if (showNordpool) {
+        loadNordpoolDebug();
+      }
+    }
+
+    function loadNordpoolDebug() {
+      Homey.get('nordpoolLastFetch', function (err, payload) {
+        var data = (!err && payload && typeof payload === 'object') ? payload : null;
+        var fetchedAt = data && data.fetchedAt ? new Date(data.fetchedAt).toLocaleString() : 'n/a';
+        var area = data && data.area ? data.area : 'n/a';
+        var currency = data && data.currency ? data.currency : 'n/a';
+        var count = data && Number.isFinite(Number(data.count)) ? Number(data.count) : (data && Array.isArray(data.slots) ? data.slots.length : 0);
+
+        nordpoolMetaEl.textContent = 'Fetched: ' + fetchedAt + ' | Area: ' + area + ' | Currency: ' + currency + ' | Slots: ' + count;
+
+        if (data && Array.isArray(data.slots) && data.slots.length > 0) {
+          nordpoolDebugEl.textContent = JSON.stringify(data.slots, null, 2);
+        } else if (data) {
+          nordpoolDebugEl.textContent = JSON.stringify(data, null, 2);
+        } else {
+          nordpoolDebugEl.textContent = 'No fetch snapshot available yet.\n\nClick Refresh to trigger an on-demand Nordpool fetch.';
+        }
+
+        Homey.get('nordpoolLastFetchError', function (err2, errorPayload) {
+          if (!err2 && errorPayload) {
+            if (typeof errorPayload === 'string') {
+              nordpoolErrorEl.textContent = 'Last fetch error: ' + errorPayload;
+            } else if (typeof errorPayload === 'object') {
+              var at = errorPayload.at ? new Date(errorPayload.at).toLocaleString() : 'unknown time';
+              nordpoolErrorEl.textContent = 'Last fetch error (' + at + '): ' + (errorPayload.message || JSON.stringify(errorPayload));
+            } else {
+              nordpoolErrorEl.textContent = 'Last fetch error: ' + String(errorPayload);
+            }
+          } else {
+            nordpoolErrorEl.textContent = '';
+          }
+        });
+      });
     }
 
     function slugify(value) {
@@ -654,6 +779,9 @@
         var windowText = (rt.planWindowStart && rt.planWindowEnd)
           ? (new Date(rt.planWindowStart).toLocaleString() + ' -> ' + new Date(rt.planWindowEnd).toLocaleString())
           : 'No active window';
+        if (p.controlMode === 'fixed_window') {
+          windowText = 'Daily fixed window: ' + (p.fixedWindowStart || '22:00') + ' -> ' + (p.fixedWindowEnd || '06:00') + (isOn ? ' (active now)' : '');
+        }
         var modeText = p.controlMode === 'fixed_window'
           ? ('Fixed ' + (p.fixedWindowStart || '22:00') + '-' + (p.fixedWindowEnd || '06:00') + (p.fixedMinTempMonitor ? ' + min-temp monitor' : ''))
           : 'Smart price';
@@ -794,6 +922,18 @@
     areaSelect.addEventListener('change', function () {
       var auto = AREA_CURRENCIES[areaSelect.value];
       if (auto) currencyInput.value = auto;
+    });
+
+    tabPriceSettingsBtn.addEventListener('click', function () {
+      setPage('price');
+    });
+
+    tabProfilesBtn.addEventListener('click', function () {
+      setPage('profiles');
+    });
+
+    tabNordpoolBtn.addEventListener('click', function () {
+      setPage('nordpool');
     });
 
     form.name.addEventListener('input', function () {
@@ -955,6 +1095,26 @@
       });
     });
 
+    refreshNordpoolDebugBtn.addEventListener('click', function () {
+      refreshNordpoolDebugBtn.disabled = true;
+      refreshNordpoolDebugBtn.textContent = 'Refreshing...';
+
+      Homey.set('nordpoolDebugRefreshRequest', Date.now(), function (err) {
+        if (err) {
+          refreshNordpoolDebugBtn.disabled = false;
+          refreshNordpoolDebugBtn.textContent = 'Refresh';
+          return showStatus(String(err), true);
+        }
+
+        setTimeout(function () {
+          loadNordpoolDebug();
+          refreshNordpoolDebugBtn.disabled = false;
+          refreshNordpoolDebugBtn.textContent = 'Refresh';
+          showStatus('Nordpool debug fetch complete.', false);
+        }, 1600);
+      });
+    });
+
     savePriceSettingsBtn.addEventListener('click', function () {
       persistPriceSettings(function (source) {
         if (source === 'custom_flow') {
@@ -967,6 +1127,8 @@
 
     function onHomeyReady(Homey) {
       Homey.ready();
+
+      setPage('price');
 
       Homey.get('priceSource', function (srcErr, srcVal) {
         if (!srcErr && srcVal === 'custom_flow') {

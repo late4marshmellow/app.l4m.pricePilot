@@ -1,6 +1,6 @@
 {
   "id": "app.l4m.pricePilot",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "compatibility": ">=5.0.0",
   "sdk": 3,
   "platforms": [
@@ -27,5 +27,10 @@
     "name": "Alejandro Carido-Marcussen",
     "email": "alncm@tutanota.com"
   },
-  "brandColor": "#1a7fc1"
+  "brandColor": "#1a7fc1",
+  "source": "https://github.com/late4marshmellow/app.l4m.pricePilot",
+  "support": "https://github.com/late4marshmellow/app.l4m.pricePilot/issues",
+  "bugs": {
+    "url": "https://github.com/late4marshmellow/app.l4m.pricePilot/issues"
+  }
 }
