@@ -307,6 +307,16 @@
 
         <div class="grid grid-3" style="margin-top: 8px;">
           <div>
+            <label for="fixedMinTempMonitor">Fixed mode: monitor minimum temperature</label>
+            <select id="fixedMinTempMonitor">
+              <option value="false">No</option>
+              <option value="true">Yes (force heat when below minimum)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-3" style="margin-top: 8px;">
+          <div>
             <label for="targetTemp">Target temperature (C)</label>
             <input id="targetTemp" type="number" min="1" step="0.1" value="70" />
           </div>
@@ -380,6 +390,7 @@
       tankLiters: document.getElementById('tankLiters'),
       maxHours: document.getElementById('maxHours'),
       controlMode: document.getElementById('controlMode'),
+      fixedMinTempMonitor: document.getElementById('fixedMinTempMonitor'),
       fixedWindowStart: document.getElementById('fixedWindowStart'),
       fixedWindowEnd: document.getElementById('fixedWindowEnd')
     };
@@ -431,6 +442,7 @@
         tankLiters: 200,
         maxHoursSinceGoal: 24,
         controlMode: 'price',
+        fixedMinTempMonitor: false,
         fixedWindowStart: '22:00',
         fixedWindowEnd: '06:00'
       };
@@ -442,14 +454,29 @@
 
     function updateModeUi() {
       var fixed = form.controlMode.value === 'fixed_window';
+      var fixedMonitorMin = form.fixedMinTempMonitor.value === 'true';
       [form.fixedWindowStart, form.fixedWindowEnd].forEach(function (el) {
         el.disabled = !fixed;
         el.style.opacity = fixed ? '1' : '0.6';
       });
-      [form.tempDeviceId, form.tempCapabilityId, form.minTemp, form.targetTemp, form.powerW, form.tankLiters, form.maxHours].forEach(function (el) {
+
+      var enableSensorAndMinTemp = !fixed || fixedMonitorMin;
+      [form.tempDeviceId, form.tempCapabilityId, form.minTemp].forEach(function (el) {
+        el.disabled = !enableSensorAndMinTemp;
+        el.style.opacity = enableSensorAndMinTemp ? '1' : '0.6';
+      });
+
+      [form.targetTemp, form.powerW, form.tankLiters, form.maxHours].forEach(function (el) {
         el.disabled = fixed;
         el.style.opacity = fixed ? '0.6' : '1';
       });
+
+      form.sensorLookup.disabled = !enableSensorAndMinTemp;
+      form.sensorLookup.style.opacity = enableSensorAndMinTemp ? '1' : '0.6';
+      form.sensorFilter.disabled = !enableSensorAndMinTemp;
+      form.sensorFilter.style.opacity = enableSensorAndMinTemp ? '1' : '0.6';
+      form.fixedMinTempMonitor.disabled = !fixed;
+      form.fixedMinTempMonitor.style.opacity = fixed ? '1' : '0.6';
     }
 
     function updateEditModeInfo() {
@@ -519,6 +546,7 @@
       form.tankLiters.value = profile.tankLiters;
       form.maxHours.value = profile.maxHoursSinceGoal;
       form.controlMode.value = profile.controlMode || 'price';
+      form.fixedMinTempMonitor.value = profile.fixedMinTempMonitor ? 'true' : 'false';
       form.fixedWindowStart.value = profile.fixedWindowStart || '22:00';
       form.fixedWindowEnd.value = profile.fixedWindowEnd || '06:00';
       selectedId = profile.id;
@@ -541,6 +569,7 @@
       form.tankLiters.value = '200';
       form.maxHours.value = '24';
       form.controlMode.value = 'price';
+      form.fixedMinTempMonitor.value = 'false';
       form.fixedWindowStart.value = '22:00';
       form.fixedWindowEnd.value = '06:00';
       selectedId = null;
@@ -564,6 +593,7 @@
       var tankLiters = Number(form.tankLiters.value);
       var maxHoursSinceGoal = Number(form.maxHours.value);
       var controlMode = form.controlMode.value === 'fixed_window' ? 'fixed_window' : 'price';
+      var fixedMinTempMonitor = form.fixedMinTempMonitor.value === 'true';
       var fixedWindowStart = String(form.fixedWindowStart.value || '').trim();
       var fixedWindowEnd = String(form.fixedWindowEnd.value || '').trim();
 
@@ -574,6 +604,11 @@
         if (!isValidTimeText(fixedWindowStart)) throw new Error('Fixed window start must be HH:MM.');
         if (!isValidTimeText(fixedWindowEnd)) throw new Error('Fixed window end must be HH:MM.');
         if (fixedWindowStart === fixedWindowEnd) throw new Error('Fixed window start and end cannot be equal.');
+        if (fixedMinTempMonitor) {
+          if (!tempDeviceId) throw new Error('Temperature sensor device ID is required when fixed mode min temperature monitoring is enabled.');
+          if (!tempCapabilityId) throw new Error('Temperature capability ID is required when fixed mode min temperature monitoring is enabled.');
+          if (!Number.isFinite(minTemp)) throw new Error('Minimum temperature must be numeric when fixed mode monitoring is enabled.');
+        }
       } else {
         if (!tempDeviceId) throw new Error('Temperature sensor device ID is required.');
         if (!tempCapabilityId) throw new Error('Temperature capability ID is required.');
@@ -598,6 +633,7 @@
         tankLiters: tankLiters,
         maxHoursSinceGoal: maxHoursSinceGoal,
         controlMode: controlMode,
+        fixedMinTempMonitor: fixedMinTempMonitor,
         fixedWindowStart: fixedWindowStart || '22:00',
         fixedWindowEnd: fixedWindowEnd || '06:00'
       };
@@ -619,7 +655,7 @@
           ? (new Date(rt.planWindowStart).toLocaleString() + ' -> ' + new Date(rt.planWindowEnd).toLocaleString())
           : 'No active window';
         var modeText = p.controlMode === 'fixed_window'
-          ? ('Fixed ' + (p.fixedWindowStart || '22:00') + '-' + (p.fixedWindowEnd || '06:00'))
+          ? ('Fixed ' + (p.fixedWindowStart || '22:00') + '-' + (p.fixedWindowEnd || '06:00') + (p.fixedMinTempMonitor ? ' + min-temp monitor' : ''))
           : 'Smart price';
         var hasSensor = !!p.tempDeviceId;
         var hasControl = !!p.controlDeviceId;
@@ -765,6 +801,7 @@
     });
 
     form.controlMode.addEventListener('change', updateModeUi);
+    form.fixedMinTempMonitor.addEventListener('change', updateModeUi);
 
     form.sensorFilter.addEventListener('input', function () {
       renderSensorLookupOptions(form.sensorFilter.value);
@@ -968,6 +1005,7 @@
                     tankLiters: Number(p.tankLiters),
                     maxHoursSinceGoal: Number(p.maxHoursSinceGoal),
                     controlMode: p.controlMode === 'fixed_window' ? 'fixed_window' : 'price',
+                    fixedMinTempMonitor: !!p.fixedMinTempMonitor,
                     fixedWindowStart: isValidTimeText(p.fixedWindowStart) ? p.fixedWindowStart : '22:00',
                     fixedWindowEnd: isValidTimeText(p.fixedWindowEnd) ? p.fixedWindowEnd : '06:00'
                   };
@@ -975,7 +1013,10 @@
                 .filter(function (p) {
                   if (!p.id) return false;
                   if (p.controlMode === 'fixed_window') {
-                    return isValidTimeText(p.fixedWindowStart) && isValidTimeText(p.fixedWindowEnd) && p.fixedWindowStart !== p.fixedWindowEnd;
+                    var hasWindow = isValidTimeText(p.fixedWindowStart) && isValidTimeText(p.fixedWindowEnd) && p.fixedWindowStart !== p.fixedWindowEnd;
+                    if (!hasWindow) return false;
+                    if (!p.fixedMinTempMonitor) return true;
+                    return p.tempDeviceId && p.tempCapabilityId && Number.isFinite(p.minTemp);
                   }
                   return p.tempDeviceId && p.tempCapabilityId && Number.isFinite(p.minTemp) && Number.isFinite(p.targetTemp) && p.targetTemp > p.minTemp && Number.isFinite(p.powerW) && p.powerW > 0 && Number.isFinite(p.tankLiters) && p.tankLiters > 0 && Number.isFinite(p.maxHoursSinceGoal) && p.maxHoursSinceGoal > 0;
                 });

@@ -226,19 +226,48 @@ module.exports = class PricePilotApp extends Homey.App {
 
     if (controlMode === 'fixed_window') {
       const fixed = this._computeFixedWindow(profile.fixedWindowStart, profile.fixedWindowEnd, now);
-      this._setPlan(planId, 'planned', fixed.start, fixed.end);
+      const monitorMinTemp = !!profile.fixedMinTempMonitor;
+      const minTemp = Number(profile.minTemp);
+
+      let currentTemp = null;
+      let fixedMinTempTriggered = false;
+      let planStart = fixed.start;
+      let planEnd = fixed.end;
+      let shouldHeat = fixed.isOn;
+
+      if (monitorMinTemp) {
+        if (!Number.isFinite(minTemp)) {
+          throw new Error('Fixed mode minimum temperature must be numeric when monitoring is enabled');
+        }
+        currentTemp = await this._readCurrentTempFromProfile(profile);
+
+        // Safety override: if below minimum temperature while fixed window is OFF,
+        // force a short heating run and let the next planner pass re-evaluate.
+        if (!fixed.isOn && currentTemp <= minTemp) {
+          fixedMinTempTriggered = true;
+          shouldHeat = true;
+          planStart = now;
+          planEnd = new Date(now.getTime() + 30 * 60 * 1000);
+        }
+      }
+
+      this._setPlan(planId, 'planned', planStart, planEnd);
       this._patchRuntime(planId, {
         controlMode,
+        fixedMinTempMonitor: monitorMinTemp,
+        fixedMinTempTriggered,
+        minTemp,
+        currentTemp,
         fixedWindowStart: profile.fixedWindowStart,
         fixedWindowEnd: profile.fixedWindowEnd,
         planState: 'planned',
-        planWindowStart: fixed.start.toISOString(),
-        planWindowEnd: fixed.end.toISOString(),
-        heaterShouldBeOn: fixed.isOn,
+        planWindowStart: planStart.toISOString(),
+        planWindowEnd: planEnd.toISOString(),
+        heaterShouldBeOn: shouldHeat,
         updatedAt: now.toISOString(),
       });
-      this.log(`[${planId}] Fixed window ${profile.fixedWindowStart}-${profile.fixedWindowEnd} => ${fixed.start.toISOString()} -> ${fixed.end.toISOString()} (${fixed.isOn ? 'ON' : 'OFF'})`);
-      return fixed.isOn;
+      this.log(`[${planId}] Fixed window ${profile.fixedWindowStart}-${profile.fixedWindowEnd} => ${planStart.toISOString()} -> ${planEnd.toISOString()} (${shouldHeat ? 'ON' : 'OFF'})${fixedMinTempTriggered ? ` [min-temp override ${currentTemp}°C <= ${minTemp}°C]` : ''}`);
+      return shouldHeat;
     }
 
     const targetTemp = Number(profile.targetTemp);
@@ -435,15 +464,21 @@ module.exports = class PricePilotApp extends Homey.App {
         tankLiters: Number(p.tankLiters),
         maxHoursSinceGoal: Number(p.maxHoursSinceGoal),
         controlMode: p.controlMode === 'fixed_window' ? 'fixed_window' : 'price',
+        fixedMinTempMonitor: !!p.fixedMinTempMonitor,
         fixedWindowStart: this._isValidClockTime(p.fixedWindowStart) ? String(p.fixedWindowStart) : '22:00',
         fixedWindowEnd: this._isValidClockTime(p.fixedWindowEnd) ? String(p.fixedWindowEnd) : '06:00',
       }))
       .filter((p) => {
         if (!p.id) return false;
         if (p.controlMode === 'fixed_window') {
-          return this._isValidClockTime(p.fixedWindowStart)
+          const hasValidWindow = this._isValidClockTime(p.fixedWindowStart)
             && this._isValidClockTime(p.fixedWindowEnd)
             && p.fixedWindowStart !== p.fixedWindowEnd;
+          if (!hasValidWindow) return false;
+          if (!p.fixedMinTempMonitor) return true;
+          return p.tempDeviceId
+            && p.tempCapabilityId
+            && Number.isFinite(p.minTemp);
         }
         return p.tempDeviceId
           && p.tempCapabilityId
@@ -472,6 +507,7 @@ module.exports = class PricePilotApp extends Homey.App {
       tankLiters: 200,
       maxHoursSinceGoal: 24,
       controlMode: 'price',
+      fixedMinTempMonitor: false,
       fixedWindowStart: '22:00',
       fixedWindowEnd: '06:00',
     };

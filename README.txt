@@ -1,0 +1,1 @@
+Let PricePilot take the guesswork out of timing your water heater. Automatically switches on when electricity prices are at their lowest, saving you money every day. Works with live price data and gives you full manual control whenever you need it.
