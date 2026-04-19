@@ -8,6 +8,8 @@ const OSLO_TZ = 'Europe/Oslo';
 const NORDPOOL_PUBLISH_HOUR_OSLO = 13;
 const NORDPOOL_PUBLISH_GRACE_MINUTES = 20;
 const NORDPOOL_MAX_CACHE_AGE_HOURS = 36;
+const POWER_GOAL_REACHED_MAX_WATTS = 0.5;
+const POWER_GOAL_REACHED_MIN_ON_MINUTES = 5;
 
 module.exports = class PricePilotApp extends Homey.App {
 
@@ -90,7 +92,7 @@ module.exports = class PricePilotApp extends Homey.App {
         profile,
         priceSlots
       );
-      this._syncHeatingStateAndTrigger(profile.id, 'manual:plan_heating');
+      await this._syncHeatingStateAndTrigger(profile.id, 'manual:plan_heating');
       return { should_heat: shouldHeat };
     });
 
@@ -135,7 +137,7 @@ module.exports = class PricePilotApp extends Homey.App {
         try {
           if (profile.controlMode === 'fixed_window') {
             await this._planHeating(profile, []);
-            this._syncHeatingStateAndTrigger(profile.id, `auto:${source}`);
+            await this._syncHeatingStateAndTrigger(profile.id, `auto:${source}`);
             continue;
           }
 
@@ -164,7 +166,7 @@ module.exports = class PricePilotApp extends Homey.App {
           }
 
           await this._planHeating(profile, this._cachedAutoPriceSlots);
-          this._syncHeatingStateAndTrigger(profile.id, `auto:${source}`);
+          await this._syncHeatingStateAndTrigger(profile.id, `auto:${source}`);
         } catch (err) {
           this.error(`[${profile.id}] Auto planning failed:`, err.message);
         }
@@ -183,7 +185,7 @@ module.exports = class PricePilotApp extends Homey.App {
   async _refreshHeatingStates(source) {
     const profiles = this._getProfiles();
     for (const profile of profiles) {
-      this._syncHeatingStateAndTrigger(profile.id, source || 'state-refresh');
+      await this._syncHeatingStateAndTrigger(profile.id, source || 'state-refresh');
     }
   }
 
@@ -430,6 +432,9 @@ module.exports = class PricePilotApp extends Homey.App {
         name: String(p.name || p.id || '').trim() || this._sanitizeProfileId(p.id),
         tempDeviceId: String(p.tempDeviceId || '').trim(),
         tempCapabilityId: String(p.tempCapabilityId || '').trim(),
+        tempCorrection: Number.isFinite(Number(p.tempCorrection)) ? Number(p.tempCorrection) : 0,
+        powerDeviceId: String(p.powerDeviceId || '').trim(),
+        powerCapabilityId: String(p.powerCapabilityId || '').trim(),
         controlDeviceId: String(p.controlDeviceId || '').trim(),
         controlCapabilityId: String(p.controlCapabilityId || '').trim() || 'onoff',
         minTemp: Number(p.minTemp),
@@ -473,6 +478,9 @@ module.exports = class PricePilotApp extends Homey.App {
       name: 'Main boiler',
       tempDeviceId: '',
       tempCapabilityId: 'measure_temperature',
+      tempCorrection: 0,
+      powerDeviceId: '',
+      powerCapabilityId: '',
       controlDeviceId: '',
       controlCapabilityId: 'onoff',
       minTemp: 45,
@@ -573,12 +581,22 @@ module.exports = class PricePilotApp extends Homey.App {
     return on;
   }
 
-  _syncHeatingStateAndTrigger(planId, source) {
+  async _syncHeatingStateAndTrigger(planId, source) {
     const profileId = this._sanitizeProfileId(planId);
     const runtime = this._getRuntime(profileId) || {};
     const hadPrevious = typeof runtime.heaterShouldBeOn === 'boolean';
     const previous = !!runtime.heaterShouldBeOn;
     const next = this._isHeatingNow(profileId);
+    const profile = this._getProfiles().find((p) => p.id === profileId);
+
+    if (profile) {
+      try {
+        await this._maybeMarkGoalReachedFromPower(profile, next, source || 'state-sync');
+      } catch (err) {
+        this.error(`[${profileId}] Failed power-based goal detection:`, err.message);
+      }
+    }
+
     const now = new Date();
     const lastApply = runtime.controlLastAppliedAt ? new Date(runtime.controlLastAppliedAt) : null;
     const shouldReassert = !lastApply || isNaN(lastApply.getTime()) || ((now.getTime() - lastApply.getTime()) > 30 * 60 * 1000);
@@ -592,7 +610,6 @@ module.exports = class PricePilotApp extends Homey.App {
       return next;
     }
 
-    const profile = this._getProfiles().find((p) => p.id === profileId);
     const tokens = {
       profile_id: profileId,
       profile_name: profile ? profile.name : profileId,
@@ -904,12 +921,90 @@ module.exports = class PricePilotApp extends Homey.App {
       throw new Error(`Capability "${profile.tempCapabilityId}" on "${device.name}" is not numeric`);
     }
 
+    const correction = Number.isFinite(Number(profile.tempCorrection)) ? Number(profile.tempCorrection) : 0;
+    const correctedValue = value + correction;
+
     this._patchRuntime(profile.id, {
-      currentTemp: value,
+      currentTemp: correctedValue,
+      sensorRawTemp: value,
+      tempCorrection: correction,
+      updatedAt: new Date().toISOString(),
+    });
+
+    return correctedValue;
+  }
+
+  async _readCurrentPowerFromProfile(profile) {
+    if (!profile.powerDeviceId || !profile.powerCapabilityId) {
+      return null;
+    }
+
+    const devices = await this._getAllDevices();
+    const device = devices[profile.powerDeviceId];
+    if (!device) {
+      throw new Error(`Power monitor device not found for profile "${profile.name}" (device ID: ${profile.powerDeviceId})`);
+    }
+
+    const cap = device.capabilitiesObj && device.capabilitiesObj[profile.powerCapabilityId];
+    if (!cap) {
+      throw new Error(`Power capability "${profile.powerCapabilityId}" not found on "${device.name}"`);
+    }
+
+    const value = Number(cap.value);
+    if (!Number.isFinite(value)) {
+      throw new Error(`Power capability "${profile.powerCapabilityId}" on "${device.name}" is not numeric`);
+    }
+
+    this._patchRuntime(profile.id, {
+      currentPowerW: value,
+      powerDeviceId: profile.powerDeviceId,
+      powerCapabilityId: profile.powerCapabilityId,
       updatedAt: new Date().toISOString(),
     });
 
     return value;
+  }
+
+  async _maybeMarkGoalReachedFromPower(profile, shouldHeat, source) {
+    if (!shouldHeat) return false;
+    if (!profile.powerDeviceId || !profile.powerCapabilityId) return false;
+
+    const runtime = this._getRuntime(profile.id) || {};
+    if (runtime.controlAppliedOn !== true) return false;
+
+    const lastApply = runtime.controlLastAppliedAt ? new Date(runtime.controlLastAppliedAt) : null;
+    const poweredOnLongEnough = lastApply
+      && !isNaN(lastApply.getTime())
+      && ((Date.now() - lastApply.getTime()) >= POWER_GOAL_REACHED_MIN_ON_MINUTES * 60 * 1000);
+
+    if (!poweredOnLongEnough) return false;
+
+    const currentPowerW = await this._readCurrentPowerFromProfile(profile);
+    if (!Number.isFinite(currentPowerW) || currentPowerW > POWER_GOAL_REACHED_MAX_WATTS) {
+      return false;
+    }
+
+    const now = new Date();
+    const lastReachedAt = runtime.lastReachedAt ? new Date(runtime.lastReachedAt) : null;
+    const shouldLog = !lastReachedAt
+      || isNaN(lastReachedAt.getTime())
+      || ((now.getTime() - lastReachedAt.getTime()) > 10 * 60 * 1000);
+
+    this._patchRuntime(profile.id, {
+      lastReachedAt: now.toISOString(),
+      hoursSinceGoal: 0,
+      goalReachedSource: 'power_zero_while_on',
+      goalReachedAt: now.toISOString(),
+      goalReachedPowerW: currentPowerW,
+      currentPowerW,
+      updatedAt: now.toISOString(),
+    });
+
+    if (shouldLog) {
+      this.log(`[${profile.id}] Goal marked reached from power monitor: ${currentPowerW}W while heater remains ON (${source || 'power-monitor'})`);
+    }
+
+    return true;
   }
 
   _computeHeatingRatePerHour(powerW, tankLiters) {
@@ -937,6 +1032,8 @@ module.exports = class PricePilotApp extends Homey.App {
       const seen = new Set();
       const controlCatalog = [];
       const controlSeen = new Set();
+      const powerCatalog = [];
+      const powerSeen = new Set();
       let tempLikeCandidates = 0;
 
       for (const dev of deviceValues) {
@@ -950,6 +1047,7 @@ module.exports = class PricePilotApp extends Homey.App {
         for (const capId of capIds) {
           const cap = capsObj[capId] || null;
           const capLc = String(capId).toLowerCase();
+          const titleLc = String((cap && cap.title) || '').toLowerCase();
 
           const looksLikeOnOff = /(^|\.)onoff$/.test(capLc);
           if (looksLikeOnOff) {
@@ -966,7 +1064,27 @@ module.exports = class PricePilotApp extends Homey.App {
             }
           }
 
-          const titleLc = String((cap && cap.title) || '').toLowerCase();
+          const units = cap && cap.units ? String(cap.units).trim().toLowerCase() : '';
+          const looksLikePower = capLc === 'measure_power'
+            || capLc.endsWith('.measure_power')
+            || (capLc.includes('power') && units === 'w')
+            || titleLc.includes('watt')
+            || (titleLc.includes('power') && units === 'w');
+          if (looksLikePower) {
+            const powerKey = `${dev.id}::${capId}`;
+            if (!powerSeen.has(powerKey)) {
+              powerSeen.add(powerKey);
+              powerCatalog.push({
+                deviceId: dev.id,
+                deviceName: dev.name || dev.id,
+                capabilityId: capId,
+                capabilityTitle: cap && cap.title ? String(cap.title) : capId,
+                currentValue: (cap && cap.value !== undefined && cap.value !== null) ? cap.value : null,
+                units: (cap && cap.units) ? String(cap.units) : 'W',
+              });
+            }
+          }
+
           // Exclude light_temperature (Zigbee colour temperature, not a real sensor)
           if (capLc === 'light_temperature') continue;
           const looksLikeTemp = capLc.includes('temp') || capLc.includes('temperature') || titleLc.includes('temp');
@@ -1000,9 +1118,16 @@ module.exports = class PricePilotApp extends Homey.App {
         return an.localeCompare(bn);
       });
 
+      powerCatalog.sort((a, b) => {
+        const an = `${a.deviceName} ${a.capabilityId}`.toLowerCase();
+        const bn = `${b.deviceName} ${b.capabilityId}`.toLowerCase();
+        return an.localeCompare(bn);
+      });
+
       this.log(`Temp-like capability candidates: ${tempLikeCandidates}`);
       this.log(`Sensor catalog entries stored: ${catalog.length}`);
       this.log(`Control catalog entries stored: ${controlCatalog.length}`);
+      this.log(`Power catalog entries stored: ${powerCatalog.length}`);
       if (catalog.length > 0) {
         this.log(`First catalog entry: ${catalog[0].deviceName} :: ${catalog[0].capabilityId}`);
       }
@@ -1013,10 +1138,14 @@ module.exports = class PricePilotApp extends Homey.App {
       this.homey.settings.set('boilerControlCatalog', controlCatalog);
       this.homey.settings.set('boilerControlCatalogUpdatedAt', new Date().toISOString());
       this.homey.settings.set('boilerControlCatalogError', null);
+      this.homey.settings.set('boilerPowerCatalog', powerCatalog);
+      this.homey.settings.set('boilerPowerCatalogUpdatedAt', new Date().toISOString());
+      this.homey.settings.set('boilerPowerCatalogError', null);
       return catalog;
     } catch (err) {
       this.homey.settings.set('boilerSensorCatalogError', err.message || String(err));
       this.homey.settings.set('boilerControlCatalogError', err.message || String(err));
+      this.homey.settings.set('boilerPowerCatalogError', err.message || String(err));
       throw err;
     }
   }
