@@ -1,82 +1,171 @@
 # PricePilot
 
-A Homey app that plans hot water boiler heating to run during the cheapest electricity price slots, while respecting a safety deadline to prevent the water from going stale.
+PricePilot is a Homey app for hot water boiler control. It builds heating plans from electricity prices, keeps separate settings per boiler profile, and can either drive your heater directly or expose flow cards you can use in your own automations.
 
-## How it works
+## What it does
 
-The app reads two values from your devices in real time:
-1. **Current hot water temperature** — from a Shelly or similar sensor
-2. **Hours since the boiler last reached its goal** — from a custom sensor capability
+PricePilot can:
 
-Each boiler profile can also apply its own **temperature correction** offset before planning. This is useful when a sensor consistently reads a bit low or high compared to the actual water temperature.
+- Manage multiple boiler profiles from one app.
+- Plan heating against the cheapest available price periods.
+- Respect a minimum temperature safety floor.
+- Use Nordpool automatically or accept imported JSON price data from flows.
+- Track live temperature with an optional correction offset.
+- Use an optional power monitor to detect when the boiler has effectively reached its goal.
+- Trigger ON/OFF flow cards when the heating state changes.
 
-Profiles can also use an optional **power monitor** capability. If the boiler is still commanded ON by PricePilot, but the live watt reading drops to `0`, the app treats that as the boiler having reached its internal target and resets the "hours since goal" timer.
+## Planning model
 
-Given a list of upcoming electricity price slots (e.g. from the Tibber or Nordpool app), it finds the cheapest window long enough to heat the water, subject to a 24-hour safety limit. The plan is stored internally in the app's settings so it persists across flow runs.
+For price-based control, PricePilot continuously estimates how long the tank needs to heat from the current temperature to the target temperature.
+
+It then:
+
+- Chooses the cheapest valid future window before the safety deadline.
+- Starts heating immediately if the temperature is already at or below the configured minimum.
+- Re-evaluates plans regularly.
+- Never cuts a running heating window short.
+- Can extend an active window if recent hot water use means continuing now is cheaper or safer than waiting for a later window.
+
+## Price sources
+
+In app settings, choose one of these modes:
+
+- `Nordpool (auto planning in app)`
+  PricePilot fetches Nordpool prices itself and replans automatically.
+- `Custom flow JSON import (no Nordpool auto)`
+  Your own Homey flow or external logic provides price data through the action card `Plan heating with custom prices`.
+
+The settings page includes a `Price Data` tab that shows the latest stored price snapshot, whether it came from Nordpool auto fetch or custom JSON import.
+
+## Boiler profiles
+
+Each profile has its own independent configuration and plan.
+
+For each profile you can configure:
+
+- Profile name
+- Temperature sensor device and capability
+- Temperature correction in °C
+- Optional power monitor device and capability
+- Optional direct control device and capability
+- Minimum temperature
+- Target temperature
+- Boiler power in watts
+- Tank volume in liters
+- Maximum hours since goal
+- Control mode
+
+Available control modes:
+
+- `Smart price planning`
+  Uses price slots and the planner.
+- `Fixed on/off time window`
+  Runs inside a daily time window, with optional minimum-temperature override.
+
+## Temperature correction
+
+Use `Temperature correction (C)` when your sensor is consistently offset from the real water temperature.
+
+Examples:
+
+- If the sensor reads `67C` but the actual water is `70C`, set correction to `+3`.
+- If the sensor reads `72C` but the actual water is `70C`, set correction to `-2`.
+
+## Power monitor support
+
+You can optionally assign a power monitor capability that reports live watts.
+
+If PricePilot still expects the heater to be ON, but the live power falls to `0W`, the app treats that as the boiler having reached its goal and updates the runtime state accordingly. This helps when the boiler thermostat stops heating before the temperature sensor fully catches up.
+
+## Direct control vs flows
+
+PricePilot can work in two ways:
+
+- `Direct control`
+  If you assign a control device and capability, the app can write the ON/OFF state directly.
+- `Flow-driven control`
+  If you prefer flows, use the built-in trigger and condition cards to switch the heater yourself.
 
 ## Flow cards
 
-### Actions
-- **Plan heating** *(input: price_slots JSON → token: should_heat)*
-  Pass a JSON array of price slots. Finds the optimal window and returns `true` if it's time to heat right now.
+### Action cards
 
-### Conditions
-- **Heating is scheduled now**
-  Returns `true` if the current time is within the stored heating window. Use this to gate your boiler on/off flow.
+- `Plan heating with custom prices`
+  Input: `profile_id`, `price_slots` JSON
+  Output token: `should_heat`
 
-## Price slot format
+Use this when prices come from another app, script, API, or Homey flow instead of Nordpool auto fetch.
 
-Each slot must have at minimum:
+### Condition cards
+
+- `Heating is scheduled now`
+  Returns `true` when the selected profile should currently be heating.
+
+### Trigger cards
+
+- `Heating should turn ON for [[profile_id]]`
+- `Heating should turn OFF for [[profile_id]]`
+
+These trigger when PricePilot changes its decision for a profile.
+
+## Price slot JSON format
+
+Each imported slot must contain at least:
+
 ```json
 {
   "startsAt": "2026-04-07T10:00:00.000Z",
-  "endsAt":   "2026-04-07T10:15:00.000Z",
-  "price":    0.123
+  "endsAt": "2026-04-07T10:15:00.000Z",
+  "price": 0.123
 }
 ```
-`durationMinutes` is optional (defaults to 15).
 
-## Price source mode
+Optional field:
 
-In app settings, choose one of these:
-
-- `Nordpool (auto planning in app)`: the app fetches Nordpool prices automatically.
-- `Custom flow JSON import`: Nordpool auto planning is disabled so your own flow/app can provide prices using the **Plan heating with custom prices** flow card.
-
-## Configuration
-
-In each boiler profile you can set a **Temperature correction (C)** value.
-
-- If the sensor reads **3C lower** than the actual water temperature, set the correction to **+3**.
-- Example: if the real water temperature is 70C but the sensor reports 67C, use `+3`.
-
-You can also optionally select a **power monitor** capability that reports live watts. When that reading falls to `0W` while the heater is already ON, PricePilot records that the boiler has internally reached its goal even if the temperature sensor itself is slightly behind.
-
-Edit the constants at the top of `app.js` before deploying:
-
-```js
-const HEATING = {
-  targetTemp: 70,        // target °C
-  heatingRate: 6.5,      // °C per hour
-  maxHoursSinceGoal: 24  // safety window in hours
-};
-
-const DEVICE_VALUE_CONFIGS = {
-  currentHotwaterTemp: {
-    searchDeviceFragmentsString: 'shelly;hotwater', // ; = AND
-    selectedCapabilityFragment: 'temperature.1'
-  },
-  hoursSinceGoal: {
-    searchDeviceFragmentsString: 'master;switch',
-    selectedCapabilityFragment: 'devicecapabilities_number-custom_56.number13'
-  }
-};
+```json
+{
+  "durationMinutes": 15
+}
 ```
 
-## Suggested flow setup
+Notes:
 
-**Flow A — Plan (runs every 15 min):**
-> Trigger: Every 15 minutes → Action: **Plan heating** (with your custom price_slots JSON source)
+- `startsAt` and `endsAt` must be ISO date-time strings.
+- `price` must be numeric.
+- `durationMinutes` defaults to `15` if omitted.
+- The `Price Data` tab shows the raw imported JSON timestamps unchanged, while the visual summary is shown in local browser time.
 
-**Flow B — Heat on/off:**
-> Trigger: Every 5 minutes → Condition: **Heating is scheduled now** → Then: turn boiler ON / Else: turn boiler OFF
+## Suggested setup
+
+### Option A: Nordpool automatic planning
+
+1. Set `Price source` to `Nordpool (auto planning in app)`.
+2. Choose area and currency in app settings.
+3. Create one or more boiler profiles.
+4. Either assign a direct control device or build flows from PricePilot cards.
+
+### Option B: Custom JSON price import
+
+1. Set `Price source` to `Custom flow JSON import (no Nordpool auto)`.
+2. Create one or more boiler profiles.
+3. Build a flow that regularly calls `Plan heating with custom prices`.
+4. Use the returned `should_heat` token, the condition card, or the ON/OFF trigger cards to control your heater.
+
+## Example flow ideas
+
+### Flow A: Import and plan
+
+Run every 15 minutes and call `Plan heating with custom prices` with your JSON payload.
+
+### Flow B: Heater control
+
+Use either:
+
+- The `Heating is scheduled now` condition on a recurring flow, or
+- The `Heating should turn ON/OFF` trigger cards for event-driven control.
+
+## Notes
+
+- All profile settings are configured in the app settings page. There is no longer any constant-based setup in `app.js`.
+- If you use custom JSON import mode, automatic Nordpool replanning is disabled until your flow sends a new price payload.
+- The `Price Data` tab is intended as a read-only diagnostic view of the latest stored prices.
