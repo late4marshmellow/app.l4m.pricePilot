@@ -269,6 +269,65 @@ module.exports = class PricePilotApp extends Homey.App {
     const hoursSinceGoal = this._computeHoursSinceGoal(planId, currentTemp, targetTemp, maxHoursSinceGoal);
     const hoursToHeat = this._computeHoursToHeat(currentTemp, targetTemp, heatingRate);
 
+    const existing = this._readPlan(planId);
+    if (existing.state === 'planned' && existing.start && existing.end && now >= existing.start && now < existing.end) {
+      const remainingHoursInCurrentWindow = Math.max(0, (existing.end.getTime() - now.getTime()) / 3600000);
+
+      if (hoursToHeat <= remainingHoursInCurrentWindow) {
+        this._patchRuntime(planId, {
+          controlMode,
+          planState: 'planned',
+          planWindowStart: existing.start.toISOString(),
+          planWindowEnd: existing.end.toISOString(),
+          heaterShouldBeOn: true,
+          updatedAt: now.toISOString(),
+        });
+        this.log(`[${planId}] Inside active window — keeping current end ${existing.end.toISOString()} (remaining window already covers updated heat need)`);
+        return true;
+      }
+
+      const slotMin = priceSlots[0].durationMinutes || 15;
+      const extensionHoursNeeded = Math.max(0, hoursToHeat - remainingHoursInCurrentWindow);
+      const extensionSlotsNeeded = Math.max(1, Math.ceil((extensionHoursNeeded * 60) / slotMin));
+      const latestStart = new Date(now.getTime() + (maxHoursSinceGoal - hoursSinceGoal) * 3600000);
+      const extensionWindow = this._buildPriceWindows(priceSlots, extensionSlotsNeeded, {
+        exactStart: existing.end,
+      })[0] || null;
+      const futureWindows = this._buildPriceWindows(priceSlots, extensionSlotsNeeded, {
+        earliestStart: new Date(existing.end.getTime() + 1),
+        latestStart,
+      });
+      const bestFutureWindow = futureWindows.length > 0
+        ? futureWindows.reduce((a, b) => (b.cost < a.cost || (b.cost === a.cost && b.start < a.start) ? b : a))
+        : null;
+      const mustExtendNow = currentTemp <= minTemp || hoursSinceGoal >= maxHoursSinceGoal;
+
+      if (extensionWindow && (mustExtendNow || !bestFutureWindow || extensionWindow.cost <= bestFutureWindow.cost)) {
+        this._setPlan(planId, 'planned', existing.start, extensionWindow.end);
+        this._patchRuntime(planId, {
+          controlMode,
+          planState: 'planned',
+          planWindowStart: existing.start.toISOString(),
+          planWindowEnd: extensionWindow.end.toISOString(),
+          heaterShouldBeOn: true,
+          updatedAt: now.toISOString(),
+        });
+        this.log(`[${planId}] Inside active window — extending current plan to ${extensionWindow.end.toISOString()} (extension cost ${extensionWindow.cost.toFixed(4)}${bestFutureWindow ? ` vs future ${bestFutureWindow.cost.toFixed(4)}` : ''})`);
+        return true;
+      }
+
+      this._patchRuntime(planId, {
+        controlMode,
+        planState: 'planned',
+        planWindowStart: existing.start.toISOString(),
+        planWindowEnd: existing.end.toISOString(),
+        heaterShouldBeOn: true,
+        updatedAt: now.toISOString(),
+      });
+      this.log(`[${planId}] Inside active window — keeping current end ${existing.end.toISOString()} and deferring replan until window finishes${bestFutureWindow ? ` (future window from ${bestFutureWindow.start.toISOString()} scored better than extension)` : ''}`);
+      return true;
+    }
+
     if (hoursToHeat <= 0) {
       this._setPlan(planId, 'idle', null, null);
       this._patchRuntime(planId, {
@@ -301,21 +360,6 @@ module.exports = class PricePilotApp extends Homey.App {
       return true;
     }
 
-    // Freeze plan if we are currently inside an active window
-    const existing = this._readPlan(planId);
-    if (existing.state === 'planned' && existing.start && existing.end && now >= existing.start && now < existing.end) {
-      this._patchRuntime(planId, {
-        controlMode,
-        planState: 'planned',
-        planWindowStart: existing.start.toISOString(),
-        planWindowEnd: existing.end.toISOString(),
-        heaterShouldBeOn: true,
-        updatedAt: now.toISOString(),
-      });
-      this.log(`[${planId}] Inside active window — keeping plan unchanged`);
-      return true;
-    }
-
     // Emergency: at or over safety limit → heat immediately
     if (hoursSinceGoal >= maxHoursSinceGoal) {
       const end = new Date(now.getTime() + hoursToHeat * 3600000);
@@ -337,18 +381,9 @@ module.exports = class PricePilotApp extends Homey.App {
     const slotsNeeded = Math.max(1, Math.ceil((hoursToHeat * 60) / slotMin));
     const latestStart = new Date(now.getTime() + (maxHoursSinceGoal - hoursSinceGoal) * 3600000);
 
-    const windows = [];
-    for (let i = 0; i + slotsNeeded <= priceSlots.length; i++) {
-      const wStart = new Date(priceSlots[i].startsAt);
-      const wEnd   = new Date(priceSlots[i + slotsNeeded - 1].endsAt);
-      if (wEnd <= now || wStart < now) continue;
-      let cost = 0;
-      for (let j = i; j < i + slotsNeeded; j++) {
-        const s = priceSlots[j];
-        cost += s.price * ((s.durationMinutes || 15) / 60);
-      }
-      windows.push({ start: wStart, end: wEnd, cost });
-    }
+    const windows = this._buildPriceWindows(priceSlots, slotsNeeded, {
+      earliestStart: now,
+    });
 
     if (windows.length === 0) {
       this._setPlan(planId, 'idle', null, null);
@@ -397,6 +432,52 @@ module.exports = class PricePilotApp extends Homey.App {
     this.log(`[${planId}] Best window: ${best.start.toISOString()} → ${best.end.toISOString()} (cost ${best.cost.toFixed(4)})`);
 
     return now >= best.start && now < best.end;
+  }
+
+  _buildPriceWindows(priceSlots, slotsNeeded, options = {}) {
+    const earliestStart = options.earliestStart instanceof Date ? options.earliestStart : null;
+    const latestStart = options.latestStart instanceof Date ? options.latestStart : null;
+    const exactStart = options.exactStart instanceof Date ? options.exactStart : null;
+    const windows = [];
+
+    for (let i = 0; i + slotsNeeded <= priceSlots.length; i++) {
+      const wStart = new Date(priceSlots[i].startsAt);
+      const wEnd = new Date(priceSlots[i + slotsNeeded - 1].endsAt);
+      if (isNaN(wStart.getTime()) || isNaN(wEnd.getTime())) continue;
+      if (exactStart && wStart.getTime() !== exactStart.getTime()) continue;
+      if (earliestStart && (wEnd <= earliestStart || wStart < earliestStart)) continue;
+      if (latestStart && wStart > latestStart) continue;
+
+      let cost = 0;
+      let contiguous = true;
+      let previousEndMs = null;
+
+      for (let j = i; j < i + slotsNeeded; j++) {
+        const slot = priceSlots[j] || {};
+        const slotStart = new Date(slot.startsAt);
+        const slotEnd = new Date(slot.endsAt);
+        const slotDurationMinutes = Number(slot.durationMinutes || 15);
+        const slotPrice = Number(slot.price);
+
+        if (isNaN(slotStart.getTime()) || isNaN(slotEnd.getTime()) || !Number.isFinite(slotPrice) || !Number.isFinite(slotDurationMinutes)) {
+          contiguous = false;
+          break;
+        }
+
+        if (previousEndMs !== null && slotStart.getTime() !== previousEndMs) {
+          contiguous = false;
+          break;
+        }
+
+        previousEndMs = slotEnd.getTime();
+        cost += slotPrice * (slotDurationMinutes / 60);
+      }
+
+      if (!contiguous) continue;
+      windows.push({ start: wStart, end: wEnd, cost });
+    }
+
+    return windows;
   }
 
   _registerProfileAutocomplete(card) {
