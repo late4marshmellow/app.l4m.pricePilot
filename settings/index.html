@@ -188,10 +188,136 @@
       color: #1f6d43;
     }
 
+    .nordpool-summary {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .nordpool-summary-grid {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .nordpool-stat {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: linear-gradient(180deg, #fbfefc 0%, #f1f8f4 100%);
+      padding: 12px;
+    }
+
+    .nordpool-stat-label {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .nordpool-stat-value {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.2;
+    }
+
+    .nordpool-stat-meta {
+      margin-top: 6px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .nordpool-chart {
+      margin-top: 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: linear-gradient(180deg, #fcfffd 0%, #eef8f1 100%);
+      padding: 14px;
+    }
+
+    .nordpool-chart-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: baseline;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .nordpool-chart-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .nordpool-chart-meta {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .nordpool-bars {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(10px, 1fr));
+      gap: 4px;
+      align-items: end;
+      min-height: 180px;
+    }
+
+    .nordpool-bar-wrap {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .nordpool-bar {
+      width: 100%;
+      min-height: 10px;
+      border-radius: 999px 999px 4px 4px;
+      background: linear-gradient(180deg, #69c18a 0%, #2c8b57 100%);
+      box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.08);
+    }
+
+    .nordpool-bar.is-edge {
+      background: linear-gradient(180deg, #1d6f97 0%, #174f69 100%);
+    }
+
+    .nordpool-bar-label {
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      font-size: 10px;
+      color: var(--muted);
+      white-space: nowrap;
+      user-select: none;
+    }
+
+    .nordpool-json {
+      margin-top: 12px;
+      background: #f7fbf8;
+      border: 1px solid #d7e8dd;
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 12px;
+      line-height: 1.55;
+      color: #1f6d43;
+      white-space: pre-wrap;
+      overflow: auto;
+      max-height: 420px;
+      font-family: "Cascadia Code", "Consolas", monospace;
+    }
+
     @media (max-width: 760px) {
       .grid-2,
-      .grid-3 {
+      .grid-3,
+      .nordpool-summary-grid {
         grid-template-columns: 1fr;
+      }
+
+      .nordpool-bars {
+        min-height: 140px;
       }
     }
   </style>
@@ -200,14 +326,14 @@
   <div class="wrap">
     <section class="card">
       <h1>PricePilot</h1>
-      <p class="subtitle">Set Nordpool region once, then manage multiple boiler profiles from one place.</p>
+      <p class="subtitle">Set your price source once, then manage multiple boiler profiles from one place.</p>
     </section>
 
     <section class="card">
       <div class="tabs">
         <button class="btn-secondary tab-btn active" id="tabPriceSettings" type="button">Price Source</button>
         <button class="btn-secondary tab-btn" id="tabProfiles" type="button">Profiles</button>
-        <button class="btn-secondary tab-btn" id="tabNordpool" type="button">Nordpool debug</button>
+        <button class="btn-secondary tab-btn" id="tabNordpool" type="button">Price Data</button>
       </div>
     </section>
 
@@ -418,16 +544,23 @@
     <section class="card" id="pageNordpool" style="display:none;">
       <div class="row" style="justify-content: space-between; align-items: center;">
         <div>
-          <strong>Nordpool last fetched prices</strong>
-          <div class="subtitle" style="margin-top: 3px;">Read-only snapshot from internal app fetch logic.</div>
+          <strong>Price Data</strong>
+          <div class="subtitle" style="margin-top: 3px;">Latest stored price snapshot from auto fetch or custom JSON import. All times shown in your local browser time.</div>
         </div>
         <div style="display:flex; gap:8px;">
-          <button class="btn-secondary" id="refreshNordpoolDebug" type="button">Refresh</button>
+          <button class="btn-secondary" id="refreshNordpoolDebug" type="button">Fetch Nordpool Now</button>
         </div>
       </div>
       <div id="nordpoolMeta" class="profile-meta" style="margin-top:8px;"></div>
       <div id="nordpoolError" class="profile-meta" style="margin-top:6px; color:#9e3c3c;"></div>
-      <div id="nordpoolDebug" class="debug-box">No fetch snapshot available yet.
+      <div id="nordpoolSummary" class="nordpool-summary" style="display:none;">
+        <div class="nordpool-summary-grid">
+          <div class="nordpool-stat" id="nordpoolFirstSlot"></div>
+          <div class="nordpool-stat" id="nordpoolLastSlot"></div>
+        </div>
+        <div class="nordpool-chart" id="nordpoolChart"></div>
+      </div>
+      <div id="nordpoolDebug" class="nordpool-json">No price snapshot available yet.
 </div>
     </section>
   </div>
@@ -456,6 +589,10 @@
     var pageNordpool = document.getElementById('pageNordpool');
     var nordpoolMetaEl = document.getElementById('nordpoolMeta');
     var nordpoolErrorEl = document.getElementById('nordpoolError');
+    var nordpoolSummaryEl = document.getElementById('nordpoolSummary');
+    var nordpoolFirstSlotEl = document.getElementById('nordpoolFirstSlot');
+    var nordpoolLastSlotEl = document.getElementById('nordpoolLastSlot');
+    var nordpoolChartEl = document.getElementById('nordpoolChart');
     var nordpoolDebugEl = document.getElementById('nordpoolDebug');
     var editModeInfo = document.getElementById('editModeInfo');
     var selectedSensorInfoEl = document.getElementById('selectedSensorInfo');
@@ -540,19 +677,29 @@
     function loadNordpoolDebug() {
       Homey.get('nordpoolLastFetch', function (err, payload) {
         var data = (!err && payload && typeof payload === 'object') ? payload : null;
-        var fetchedAt = data && data.fetchedAt ? new Date(data.fetchedAt).toLocaleString() : 'n/a';
+        var fetchedAt = data && data.fetchedAt ? formatLocalDateTime(data.fetchedAt, true) : 'n/a';
         var area = data && data.area ? data.area : 'n/a';
         var currency = data && data.currency ? data.currency : 'n/a';
+        var source = data && data.source ? String(data.source) : 'nordpool_auto';
         var count = data && Number.isFinite(Number(data.count)) ? Number(data.count) : (data && Array.isArray(data.slots) ? data.slots.length : 0);
+        var sourceLabel = formatPriceSourceLabel(source);
 
-        nordpoolMetaEl.textContent = 'Fetched: ' + fetchedAt + ' | Area: ' + area + ' | Currency: ' + currency + ' | Slots: ' + count;
+        nordpoolMetaEl.textContent = 'Source: ' + sourceLabel + ' | Fetched: ' + fetchedAt + ' (local time) | Area: ' + area + ' | Currency: ' + currency + ' | Slots: ' + count;
 
         if (data && Array.isArray(data.slots) && data.slots.length > 0) {
-          nordpoolDebugEl.textContent = JSON.stringify(data.slots, null, 2);
+          renderNordpoolSnapshot(data);
         } else if (data) {
+          nordpoolSummaryEl.style.display = 'none';
+          nordpoolChartEl.innerHTML = '';
+          nordpoolFirstSlotEl.innerHTML = '';
+          nordpoolLastSlotEl.innerHTML = '';
           nordpoolDebugEl.textContent = JSON.stringify(data, null, 2);
         } else {
-          nordpoolDebugEl.textContent = 'No fetch snapshot available yet.\n\nClick Refresh to trigger an on-demand Nordpool fetch.';
+          nordpoolSummaryEl.style.display = 'none';
+          nordpoolChartEl.innerHTML = '';
+          nordpoolFirstSlotEl.innerHTML = '';
+          nordpoolLastSlotEl.innerHTML = '';
+          nordpoolDebugEl.textContent = 'No price snapshot available yet.\n\nUse Nordpool auto planning or run the custom JSON import flow card to populate this view.\n\nClick "Fetch Nordpool Now" to trigger an on-demand Nordpool fetch.';
         }
 
         Homey.get('nordpoolLastFetchError', function (err2, errorPayload) {
@@ -560,7 +707,7 @@
             if (typeof errorPayload === 'string') {
               nordpoolErrorEl.textContent = 'Last fetch error: ' + errorPayload;
             } else if (typeof errorPayload === 'object') {
-              var at = errorPayload.at ? new Date(errorPayload.at).toLocaleString() : 'unknown time';
+              var at = errorPayload.at ? formatLocalDateTime(errorPayload.at, true) : 'unknown time';
               nordpoolErrorEl.textContent = 'Last fetch error (' + at + '): ' + (errorPayload.message || JSON.stringify(errorPayload));
             } else {
               nordpoolErrorEl.textContent = 'Last fetch error: ' + String(errorPayload);
@@ -570,6 +717,198 @@
           }
         });
       });
+    }
+
+    function escapeHtml(value) {
+      return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function getLocalTimeZoneAbbreviation(value) {
+      if (!value) return '';
+      var date = new Date(value);
+      if (isNaN(date.getTime())) return '';
+      try {
+        var parts = new Intl.DateTimeFormat([], {
+          timeZoneName: 'short'
+        }).formatToParts(date);
+        var zonePart = parts.find(function (part) {
+          return part.type === 'timeZoneName';
+        });
+        return zonePart ? zonePart.value : '';
+      } catch (err) {
+        return '';
+      }
+    }
+
+    function formatLocalDateTime(value, includeZone) {
+      if (!value) return 'n/a';
+      var date = new Date(value);
+      if (isNaN(date.getTime())) return String(value);
+      var text = date.toLocaleString([], {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      var zone = includeZone ? getLocalTimeZoneAbbreviation(value) : '';
+      return zone ? (text + ' ' + zone) : text;
+    }
+
+    function formatSlotTime(value) {
+      return formatLocalDateTime(value, true);
+    }
+
+    function formatPriceSourceLabel(value) {
+      var source = String(value || 'nordpool_auto');
+      if (source === 'custom_flow') return 'Custom JSON import';
+      if (source === 'nordpool_auto') return 'Nordpool auto fetch';
+      return source;
+    }
+
+    function formatShortSlotLabel(value) {
+      if (!value) return 'n/a';
+      var date = new Date(value);
+      if (isNaN(date.getTime())) return String(value);
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function formatHourBucketLabel(value) {
+      if (!value) return 'n/a';
+      var date = new Date(value);
+      if (isNaN(date.getTime())) return String(value);
+      return date.toLocaleTimeString([], { hour: '2-digit' });
+    }
+
+    function formatPriceValue(value) {
+      var num = Number(value);
+      if (!Number.isFinite(num)) return 'n/a';
+      return num.toFixed(3);
+    }
+
+    function renderNordpoolSlotCard(targetEl, title, slot, currency) {
+      if (!slot) {
+        targetEl.innerHTML =
+          '<div class="nordpool-stat-label">' + escapeHtml(title) + '</div>' +
+          '<div class="nordpool-stat-value">n/a</div>' +
+          '<div class="nordpool-stat-meta">No slot available.</div>';
+        return;
+      }
+
+      var duration = Number(slot.durationMinutes);
+      var durationText = Number.isFinite(duration) ? duration + ' min' : 'n/a';
+      targetEl.innerHTML =
+        '<div class="nordpool-stat-label">' + escapeHtml(title) + '</div>' +
+        '<div class="nordpool-stat-value">' + escapeHtml(formatPriceValue(slot.price)) + ' ' + escapeHtml(currency || '') + '</div>' +
+        '<div class="nordpool-stat-meta">' +
+          escapeHtml(formatSlotTime(slot.startsAt)) + '<br>' +
+          'Ends: ' + escapeHtml(formatSlotTime(slot.endsAt)) + '<br>' +
+          'Duration: ' + escapeHtml(durationText) +
+        '</div>';
+    }
+
+    function groupSlotsByHour(slots) {
+      var groups = [];
+      var byKey = {};
+
+      slots.forEach(function (slot) {
+        var startsAt = slot && slot.startsAt ? new Date(slot.startsAt) : null;
+        var price = Number(slot && slot.price);
+        if (!startsAt || isNaN(startsAt.getTime()) || !Number.isFinite(price)) {
+          return;
+        }
+
+        var hourStart = new Date(startsAt.getTime());
+        hourStart.setMinutes(0, 0, 0);
+        var key = hourStart.toISOString();
+        var hit = byKey[key];
+
+        if (!hit) {
+          hit = {
+            hourStart: key,
+            sumPrice: 0,
+            count: 0,
+          };
+          byKey[key] = hit;
+          groups.push(hit);
+        }
+
+        hit.sumPrice += price;
+        hit.count += 1;
+      });
+
+      return groups.map(function (group) {
+        return {
+          hourStart: group.hourStart,
+          avgPrice: group.count ? (group.sumPrice / group.count) : null,
+          count: group.count,
+        };
+      });
+    }
+
+    function renderNordpoolChart(slots, currency) {
+      var hourlySlots = groupSlotsByHour(slots);
+      var prices = hourlySlots
+        .map(function (slot) { return Number(slot && slot.avgPrice); })
+        .filter(function (price) { return Number.isFinite(price); });
+
+      if (!prices.length) {
+        nordpoolChartEl.innerHTML = '<div class="nordpool-chart-title">Price overview</div><div class="nordpool-chart-meta">No numeric price values available.</div>';
+        return;
+      }
+
+      var minPrice = Math.min.apply(null, prices);
+      var maxPrice = Math.max.apply(null, prices);
+      var range = Math.max(maxPrice - minPrice, 0.001);
+      var bars = hourlySlots.map(function (slot, index) {
+        var price = Number(slot && slot.avgPrice);
+        var normalized = Number.isFinite(price) ? ((price - minPrice) / range) : 0;
+        var height = Math.max(12, Math.round(24 + normalized * 132));
+        var title = formatLocalDateTime(slot && slot.hourStart, true) + ' • ' + formatPriceValue(price) + ' ' + (currency || '') + ' avg';
+        var edgeClass = (index === 0 || index === hourlySlots.length - 1) ? ' is-edge' : '';
+        return '' +
+          '<div class="nordpool-bar-wrap" title="' + escapeHtml(title) + '">' +
+            '<div class="nordpool-bar' + edgeClass + '" style="height:' + height + 'px"></div>' +
+            '<div class="nordpool-bar-label">' + escapeHtml(formatHourBucketLabel(slot && slot.hourStart)) + '</div>' +
+          '</div>';
+      }).join('');
+
+      nordpoolChartEl.innerHTML = '' +
+        '<div class="nordpool-chart-head">' +
+          '<div class="nordpool-chart-title">Price overview</div>' +
+          '<div class="nordpool-chart-meta">Hourly average bars in local time (' + escapeHtml(getLocalTimeZoneAbbreviation(Date.now()) || 'local zone') + ') | Min ' + escapeHtml(formatPriceValue(minPrice)) + ' ' + escapeHtml(currency || '') + ' | Max ' + escapeHtml(formatPriceValue(maxPrice)) + ' ' + escapeHtml(currency || '') + '</div>' +
+        '</div>' +
+        '<div class="nordpool-bars">' + bars + '</div>';
+    }
+
+    function formatNordpoolSlotList(slots) {
+      return '[\n' + slots.map(function (slot) {
+        var duration = Number(slot && slot.durationMinutes);
+        return '  {\n'
+          + '    "startsAt": "' + String(slot && slot.startsAt ? slot.startsAt : '') + '",\n'
+          + '    "endsAt": "' + String(slot && slot.endsAt ? slot.endsAt : '') + '",\n'
+          + '    "price": ' + (Number.isFinite(Number(slot && slot.price)) ? Number(slot.price).toFixed(3) : 'null') + ',\n'
+          + '    "durationMinutes": ' + (Number.isFinite(duration) ? duration : 'null') + '\n'
+          + '  }';
+      }).join(',\n') + '\n]';
+    }
+
+    function renderNordpoolSnapshot(data) {
+      var slots = Array.isArray(data && data.slots) ? data.slots : [];
+      var firstSlot = slots.length ? slots[0] : null;
+      var lastSlot = slots.length ? slots[slots.length - 1] : null;
+      var currency = data && data.currency ? data.currency : '';
+
+      nordpoolSummaryEl.style.display = slots.length ? 'grid' : 'none';
+      renderNordpoolSlotCard(nordpoolFirstSlotEl, 'First fetched slot', firstSlot, currency);
+      renderNordpoolSlotCard(nordpoolLastSlotEl, 'Last fetched slot', lastSlot, currency);
+      renderNordpoolChart(slots, currency);
+      nordpoolDebugEl.textContent = formatNordpoolSlotList(slots);
     }
 
     function slugify(value) {
@@ -1250,7 +1589,7 @@
           loadNordpoolDebug();
           refreshNordpoolDebugBtn.disabled = false;
           refreshNordpoolDebugBtn.textContent = 'Refresh';
-          showStatus('Nordpool debug fetch complete.', false);
+          showStatus('Price data refresh complete.', false);
         }, 1600);
       });
     });

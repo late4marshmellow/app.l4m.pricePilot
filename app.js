@@ -87,6 +87,13 @@ module.exports = class PricePilotApp extends Homey.App {
         throw new Error(`price_slots is not valid JSON: ${err.message}`);
       }
 
+      this._storeNordpoolFetchSnapshot(
+        this.homey.settings.get('areaId') || '',
+        this.homey.settings.get('currency') || '',
+        priceSlots,
+        'custom_flow'
+      );
+
       const profile = this._requireProfileFromArg(args.profile_id);
       const shouldHeat = await this._planHeating(
         profile,
@@ -1150,12 +1157,14 @@ module.exports = class PricePilotApp extends Homey.App {
     }
   }
 
-  _storeNordpoolFetchSnapshot(area, currency, slots) {
+  _storeNordpoolFetchSnapshot(area, currency, slots, source) {
     const fetchedAt = new Date().toISOString();
+    const sourceId = String(source || 'nordpool_auto').trim() || 'nordpool_auto';
     const payload = {
       fetchedAt,
       area: String(area || ''),
       currency: String(currency || ''),
+      source: sourceId,
       count: Array.isArray(slots) ? slots.length : 0,
       slots: Array.isArray(slots) ? slots : [],
     };
