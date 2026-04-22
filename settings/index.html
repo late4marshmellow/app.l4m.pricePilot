@@ -529,6 +529,10 @@
             <label for="maxHours">Max hours since goal</label>
             <input id="maxHours" type="number" min="1" step="1" value="24" />
           </div>
+          <div>
+            <label for="lowTargetTemp">Low target temperature (C)</label>
+            <input id="lowTargetTemp" type="number" min="1" step="0.1" placeholder="Optional: e.g. 55" />
+          </div>
         </div>
 
         <div class="row" style="margin-top: 10px;">
@@ -625,6 +629,8 @@
       fixedMinTempMonitor: document.getElementById('fixedMinTempMonitor'),
       fixedWindowStart: document.getElementById('fixedWindowStart'),
       fixedWindowEnd: document.getElementById('fixedWindowEnd')
+      ,
+      lowTargetTemp: document.getElementById('lowTargetTemp')
     };
 
     var addProfileBtn = document.getElementById('addProfile');
@@ -939,6 +945,8 @@
         fixedMinTempMonitor: false,
         fixedWindowStart: '22:00',
         fixedWindowEnd: '06:00'
+        ,
+        lowTargetTemp: null
       };
     }
 
@@ -1060,6 +1068,7 @@
       form.controlCapabilityId.value = profile.controlCapabilityId || 'onoff';
       form.minTemp.value = profile.minTemp;
       form.targetTemp.value = profile.targetTemp;
+      form.lowTargetTemp.value = (profile.lowTargetTemp !== undefined && profile.lowTargetTemp !== null) ? profile.lowTargetTemp : '';
       form.powerW.value = profile.powerW;
       form.tankLiters.value = profile.tankLiters;
       form.maxHours.value = profile.maxHoursSinceGoal;
@@ -1087,6 +1096,7 @@
       form.controlCapabilityId.value = 'onoff';
       form.minTemp.value = '45';
       form.targetTemp.value = '70';
+      form.lowTargetTemp.value = '';
       form.powerW.value = '3000';
       form.tankLiters.value = '200';
       form.maxHours.value = '24';
@@ -1115,6 +1125,7 @@
       var controlCapabilityId = form.controlCapabilityId.value.trim() || 'onoff';
       var minTemp = Number(form.minTemp.value);
       var targetTemp = Number(form.targetTemp.value);
+      var lowTargetTemp = form.lowTargetTemp.value === '' ? null : Number(form.lowTargetTemp.value);
       var powerW = Number(form.powerW.value);
       var tankLiters = Number(form.tankLiters.value);
       var maxHoursSinceGoal = Number(form.maxHours.value);
@@ -1143,6 +1154,11 @@
         if (!Number.isFinite(minTemp)) throw new Error('Minimum temperature must be numeric.');
         if (!Number.isFinite(targetTemp)) throw new Error('Target temperature must be numeric.');
         if (targetTemp <= minTemp) throw new Error('Target temperature must be above minimum temperature.');
+        if (lowTargetTemp !== null) {
+          if (!Number.isFinite(lowTargetTemp)) throw new Error('Low target temperature must be numeric when provided.');
+          if (lowTargetTemp <= minTemp) throw new Error('Low target must be above minimum temperature.');
+          if (lowTargetTemp > targetTemp) throw new Error('Low target must not exceed target temperature.');
+        }
         if (!Number.isFinite(powerW) || powerW <= 0) throw new Error('Boiler power must be above 0 W.');
         if (!Number.isFinite(tankLiters) || tankLiters <= 0) throw new Error('Tank volume must be above 0 L.');
         if (!Number.isFinite(maxHoursSinceGoal) || maxHoursSinceGoal <= 0) throw new Error('Max hours must be above 0.');
@@ -1167,6 +1183,8 @@
         fixedMinTempMonitor: fixedMinTempMonitor,
         fixedWindowStart: fixedWindowStart || '22:00',
         fixedWindowEnd: fixedWindowEnd || '06:00'
+        ,
+        lowTargetTemp: lowTargetTemp
       };
     }
 
@@ -1210,7 +1228,7 @@
           '<div class="profile-item" data-id="' + p.id + '"' + active + '>' +
             '<div>' +
               '<strong>' + p.name + '</strong>' +
-              '<div class="profile-meta">Flow ID: ' + p.id + ' | Mode: ' + modeText + ' | Min ' + p.minTemp + 'C | Target ' + p.targetTemp + 'C | Power ' + p.powerW + 'W | Volume ' + p.tankLiters + 'L | Rate ' + rateText + ' | Max ' + p.maxHoursSinceGoal + 'h</div>' +
+              '<div class="profile-meta">Flow ID: ' + p.id + ' | Mode: ' + modeText + ' | Min ' + p.minTemp + 'C | Target ' + p.targetTemp + 'C' + (p.lowTargetTemp ? (' | Low ' + p.lowTargetTemp + 'C') : '') + ' | Power ' + p.powerW + 'W | Volume ' + p.tankLiters + 'L | Rate ' + rateText + ' | Max ' + p.maxHoursSinceGoal + 'h</div>' +
               '<div class="profile-meta">Sensor selected: ' + (hasSensor ? 'Yes' : 'No') + ' | Power monitor selected: ' + (hasPowerMonitor ? 'Yes' : 'No') + ' | Direct control selected: ' + (hasControl ? 'Yes' : 'No') + '</div>' +
               '<div class="profile-meta">Current temp: ' + currentTempText + ' | Raw sensor: ' + rawTempText + ' | Correction: ' + correctionText + ' | Current power: ' + currentPowerText + '</div>' +
               '<div class="profile-meta">Hours since target: ' + hoursText + ' | Heater now: <strong style="color:' + onColor + ';">' + onText + '</strong></div>' +
@@ -1645,6 +1663,7 @@
                     controlCapabilityId: String(p.controlCapabilityId || '').trim() || 'onoff',
                     minTemp: Number(p.minTemp),
                     targetTemp: Number(p.targetTemp),
+                    lowTargetTemp: Number.isFinite(Number(p.lowTargetTemp)) ? Number(p.lowTargetTemp) : null,
                     powerW: Number(p.powerW),
                     tankLiters: Number(p.tankLiters),
                     maxHoursSinceGoal: Number(p.maxHoursSinceGoal),

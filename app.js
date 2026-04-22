@@ -247,6 +247,8 @@ module.exports = class PricePilotApp extends Homey.App {
         planWindowStart: planStart.toISOString(),
         planWindowEnd: planEnd.toISOString(),
         heaterShouldBeOn: shouldHeat,
+        lowTargetUsed: false,
+        lowTargetTemp: null,
         updatedAt: now.toISOString(),
       });
       this.log(`[${planId}] Fixed window ${profile.fixedWindowStart}-${profile.fixedWindowEnd} => ${planStart.toISOString()} -> ${planEnd.toISOString()} (${shouldHeat ? 'ON' : 'OFF'})${fixedMinTempTriggered ? ` [min-temp override ${currentTemp}°C <= ${minTemp}°C]` : ''}`);
@@ -255,6 +257,7 @@ module.exports = class PricePilotApp extends Homey.App {
 
     const targetTemp = Number(profile.targetTemp);
     const minTemp = Number(profile.minTemp);
+    const lowTargetTemp = Number.isFinite(Number(profile.lowTargetTemp)) ? Number(profile.lowTargetTemp) : NaN;
     const heatingRate = this._computeHeatingRatePerHour(profile.powerW, profile.tankLiters);
     const maxHoursSinceGoal = Number(profile.maxHoursSinceGoal);
     const currentTemp = await this._readCurrentTempFromProfile(profile);
@@ -267,19 +270,24 @@ module.exports = class PricePilotApp extends Homey.App {
     if (!Number.isFinite(maxHoursSinceGoal) || maxHoursSinceGoal <= 0) throw new Error('max_hours must be a positive number');
 
     const hoursSinceGoal = this._computeHoursSinceGoal(planId, currentTemp, targetTemp, maxHoursSinceGoal);
-    const hoursToHeat = this._computeHoursToHeat(currentTemp, targetTemp, heatingRate);
+    const hoursToHeatFull = this._computeHoursToHeat(currentTemp, targetTemp, heatingRate);
+    const hoursToHeatLow = Number.isFinite(lowTargetTemp)
+      ? this._computeHoursToHeat(currentTemp, Math.min(lowTargetTemp, targetTemp), heatingRate)
+      : hoursToHeatFull;
 
     const existing = this._readPlan(planId);
     if (existing.state === 'planned' && existing.start && existing.end && now >= existing.start && now < existing.end) {
       const remainingHoursInCurrentWindow = Math.max(0, (existing.end.getTime() - now.getTime()) / 3600000);
 
-      if (hoursToHeat <= remainingHoursInCurrentWindow) {
+      if (hoursToHeatFull <= remainingHoursInCurrentWindow) {
         this._patchRuntime(planId, {
           controlMode,
           planState: 'planned',
           planWindowStart: existing.start.toISOString(),
           planWindowEnd: existing.end.toISOString(),
           heaterShouldBeOn: true,
+          lowTargetUsed: false,
+          lowTargetTemp: null,
           updatedAt: now.toISOString(),
         });
         this.log(`[${planId}] Inside active window — keeping current end ${existing.end.toISOString()} (remaining window already covers updated heat need)`);
@@ -287,7 +295,7 @@ module.exports = class PricePilotApp extends Homey.App {
       }
 
       const slotMin = priceSlots[0].durationMinutes || 15;
-      const extensionHoursNeeded = Math.max(0, hoursToHeat - remainingHoursInCurrentWindow);
+      const extensionHoursNeeded = Math.max(0, hoursToHeatFull - remainingHoursInCurrentWindow);
       const extensionSlotsNeeded = Math.max(1, Math.ceil((extensionHoursNeeded * 60) / slotMin));
       const latestStart = new Date(now.getTime() + (maxHoursSinceGoal - hoursSinceGoal) * 3600000);
       const extensionWindow = this._buildPriceWindows(priceSlots, extensionSlotsNeeded, {
@@ -310,6 +318,8 @@ module.exports = class PricePilotApp extends Homey.App {
           planWindowStart: existing.start.toISOString(),
           planWindowEnd: extensionWindow.end.toISOString(),
           heaterShouldBeOn: true,
+          lowTargetUsed: false,
+          lowTargetTemp: null,
           updatedAt: now.toISOString(),
         });
         this.log(`[${planId}] Inside active window — extending current plan to ${extensionWindow.end.toISOString()} (extension cost ${extensionWindow.cost.toFixed(4)}${bestFutureWindow ? ` vs future ${bestFutureWindow.cost.toFixed(4)}` : ''})`);
@@ -322,13 +332,15 @@ module.exports = class PricePilotApp extends Homey.App {
         planWindowStart: existing.start.toISOString(),
         planWindowEnd: existing.end.toISOString(),
         heaterShouldBeOn: true,
+        lowTargetUsed: false,
+        lowTargetTemp: null,
         updatedAt: now.toISOString(),
       });
       this.log(`[${planId}] Inside active window — keeping current end ${existing.end.toISOString()} and deferring replan until window finishes${bestFutureWindow ? ` (future window from ${bestFutureWindow.start.toISOString()} scored better than extension)` : ''}`);
       return true;
     }
 
-    if (hoursToHeat <= 0) {
+    if (hoursToHeatFull <= 0) {
       this._setPlan(planId, 'idle', null, null);
       this._patchRuntime(planId, {
         controlMode,
@@ -336,17 +348,21 @@ module.exports = class PricePilotApp extends Homey.App {
         planWindowStart: null,
         planWindowEnd: null,
         heaterShouldBeOn: false,
+        lowTargetUsed: false,
+        lowTargetTemp: null,
         updatedAt: now.toISOString(),
       });
       this.log(`[${planId}] Already at target (${currentTemp}°C ≥ ${targetTemp}°C). Plan cleared.`);
       return false;
     }
 
-    this.log(`[${planId}] ${currentTemp}°C → ${targetTemp}°C needs ${hoursToHeat}h. Last goal ${hoursSinceGoal}h ago (limit ${maxHoursSinceGoal}h).`);
+    this.log(`[${planId}] ${currentTemp}°C → ${targetTemp}°C needs ${hoursToHeatFull}h. Last goal ${hoursSinceGoal}h ago (limit ${maxHoursSinceGoal}h).`);
 
     // Hard safety floor: if below minimum temp, heat immediately.
     if (currentTemp <= minTemp) {
-      const end = new Date(now.getTime() + hoursToHeat * 3600000);
+      const useFullTarget = hoursSinceGoal >= maxHoursSinceGoal || !Number.isFinite(lowTargetTemp);
+      const hoursNeeded = useFullTarget ? hoursToHeatFull : hoursToHeatLow;
+      const end = new Date(now.getTime() + hoursNeeded * 3600000);
       this._setPlan(planId, 'planned', now, end);
       this._patchRuntime(planId, {
         controlMode,
@@ -354,15 +370,17 @@ module.exports = class PricePilotApp extends Homey.App {
         planWindowStart: now.toISOString(),
         planWindowEnd: end.toISOString(),
         heaterShouldBeOn: true,
+        lowTargetUsed: !useFullTarget,
+        lowTargetTemp: !useFullTarget && Number.isFinite(lowTargetTemp) ? Math.min(lowTargetTemp, targetTemp) : null,
         updatedAt: now.toISOString(),
       });
-      this.log(`[${planId}] Minimum temperature reached (${currentTemp}°C <= ${minTemp}°C). Emergency heating now.`);
+      this.log(`[${planId}] Minimum temperature reached (${currentTemp}°C <= ${minTemp}°C). Emergency heating now${useFullTarget ? '' : ` to low target ${Math.min(lowTargetTemp, targetTemp)}°C`} .`);
       return true;
     }
 
     // Emergency: at or over safety limit → heat immediately
     if (hoursSinceGoal >= maxHoursSinceGoal) {
-      const end = new Date(now.getTime() + hoursToHeat * 3600000);
+      const end = new Date(now.getTime() + hoursToHeatFull * 3600000);
       this._setPlan(planId, 'planned', now, end);
       this._patchRuntime(planId, {
         controlMode,
@@ -370,6 +388,8 @@ module.exports = class PricePilotApp extends Homey.App {
         planWindowStart: now.toISOString(),
         planWindowEnd: end.toISOString(),
         heaterShouldBeOn: true,
+        lowTargetUsed: false,
+        lowTargetTemp: null,
         updatedAt: now.toISOString(),
       });
       this.log(`[${planId}] Emergency: ${now.toISOString()} → ${end.toISOString()}`);
@@ -378,7 +398,7 @@ module.exports = class PricePilotApp extends Homey.App {
 
     // Normal planning: find cheapest window that fits before the safety deadline
     const slotMin = priceSlots[0].durationMinutes || 15;
-    const slotsNeeded = Math.max(1, Math.ceil((hoursToHeat * 60) / slotMin));
+    const slotsNeeded = Math.max(1, Math.ceil((hoursToHeatFull * 60) / slotMin));
     const latestStart = new Date(now.getTime() + (maxHoursSinceGoal - hoursSinceGoal) * 3600000);
 
     const windows = this._buildPriceWindows(priceSlots, slotsNeeded, {
@@ -402,7 +422,7 @@ module.exports = class PricePilotApp extends Homey.App {
     const safeWindows = windows.filter(w => w.start <= latestStart);
 
     if (safeWindows.length === 0) {
-      const end = new Date(now.getTime() + hoursToHeat * 3600000);
+      const end = new Date(now.getTime() + hoursToHeatFull * 3600000);
       this._setPlan(planId, 'planned', now, end);
       this._patchRuntime(planId, {
         controlMode,
@@ -410,6 +430,8 @@ module.exports = class PricePilotApp extends Homey.App {
         planWindowStart: now.toISOString(),
         planWindowEnd: end.toISOString(),
         heaterShouldBeOn: true,
+        lowTargetUsed: false,
+        lowTargetTemp: null,
         updatedAt: now.toISOString(),
       });
       this.log(`[${planId}] No safe windows left — emergency: ${now.toISOString()} → ${end.toISOString()}`);
@@ -427,6 +449,8 @@ module.exports = class PricePilotApp extends Homey.App {
       planWindowStart: best.start.toISOString(),
       planWindowEnd: best.end.toISOString(),
       heaterShouldBeOn: now >= best.start && now < best.end,
+      lowTargetUsed: false,
+      lowTargetTemp: null,
       updatedAt: now.toISOString(),
     });
     this.log(`[${planId}] Best window: ${best.start.toISOString()} → ${best.end.toISOString()} (cost ${best.cost.toFixed(4)})`);
@@ -521,6 +545,7 @@ module.exports = class PricePilotApp extends Homey.App {
         tempDeviceId: String(p.tempDeviceId || '').trim(),
         tempCapabilityId: String(p.tempCapabilityId || '').trim(),
         tempCorrection: Number.isFinite(Number(p.tempCorrection)) ? Number(p.tempCorrection) : 0,
+        lowTargetTemp: Number.isFinite(Number(p.lowTargetTemp)) ? Number(p.lowTargetTemp) : null,
         powerDeviceId: String(p.powerDeviceId || '').trim(),
         powerCapabilityId: String(p.powerCapabilityId || '').trim(),
         controlDeviceId: String(p.controlDeviceId || '').trim(),
@@ -567,6 +592,7 @@ module.exports = class PricePilotApp extends Homey.App {
       tempDeviceId: '',
       tempCapabilityId: 'measure_temperature',
       tempCorrection: 0,
+      lowTargetTemp: null,
       powerDeviceId: '',
       powerCapabilityId: '',
       controlDeviceId: '',
