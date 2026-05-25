@@ -52,7 +52,10 @@ module.exports = class PricePilotApp extends Homey.App {
     }, 15 * 60 * 1000);
 
     const planCard = this.homey.flow.getActionCard('plan_heating');
+    const overrideControlModeCard = this.homey.flow.getActionCard('override_control_mode');
+    const clearControlModeOverrideCard = this.homey.flow.getActionCard('clear_control_mode_override');
     const conditionCard = this.homey.flow.getConditionCard('heating_scheduled_now');
+    const overrideControlModeConditionCard = this.homey.flow.getConditionCard('override_control_mode_is');
     const whenOnCard = this.homey.flow.getTriggerCard('heating_should_turn_on');
     const whenOffCard = this.homey.flow.getTriggerCard('heating_should_turn_off');
 
@@ -60,7 +63,10 @@ module.exports = class PricePilotApp extends Homey.App {
     this.heatingShouldTurnOffCard = whenOffCard;
 
     this._registerProfileAutocomplete(planCard);
+    this._registerProfileAutocomplete(overrideControlModeCard);
+    this._registerProfileAutocomplete(clearControlModeOverrideCard);
     this._registerProfileAutocomplete(conditionCard);
+    this._registerProfileAutocomplete(overrideControlModeConditionCard);
     this._registerProfileAutocomplete(whenOnCard);
     this._registerProfileAutocomplete(whenOffCard);
 
@@ -103,10 +109,60 @@ module.exports = class PricePilotApp extends Homey.App {
       return { should_heat: shouldHeat };
     });
 
+    overrideControlModeCard.registerRunListener(async (args) => {
+      const profile = this._requireProfileFromArg(args.profile_id);
+      const durationMs = this._durationArgsToMs(args.duration, args.duration_unit);
+      const nowIso = new Date().toISOString();
+      const expiresAt = durationMs > 0
+        ? new Date(Date.now() + durationMs).toISOString()
+        : null;
+
+      this._patchRuntime(profile.id, {
+        controlOverrideEnabled: true,
+        controlOverrideValue: true,
+        controlOverrideStartedAt: nowIso,
+        controlOverrideExpiresAt: expiresAt,
+        controlOverrideDurationMs: durationMs,
+        controlOverrideClearedAt: null,
+        updatedAt: nowIso,
+      });
+
+      const shouldHeat = await this._syncHeatingStateAndTrigger(profile.id, 'manual:override_on');
+      await this._applyProfileControl(profile.id, true, 'manual:override_on', true);
+      this.log(`[${profile.id}] Control mode override ON${expiresAt ? ` until ${expiresAt}` : ' indefinitely'}`);
+      return { should_heat: shouldHeat };
+    });
+
+    clearControlModeOverrideCard.registerRunListener(async (args) => {
+      const profile = this._requireProfileFromArg(args.profile_id);
+      const nowIso = new Date().toISOString();
+
+      this._patchRuntime(profile.id, {
+        controlOverrideEnabled: false,
+        controlOverrideValue: null,
+        controlOverrideExpiresAt: null,
+        controlOverrideDurationMs: null,
+        controlOverrideClearedAt: nowIso,
+        updatedAt: nowIso,
+      });
+
+      const shouldHeat = await this._syncHeatingStateAndTrigger(profile.id, 'manual:override_off');
+      await this._applyProfileControl(profile.id, shouldHeat, 'manual:override_off', true);
+      this.log(`[${profile.id}] Control mode override OFF; normal state is ${shouldHeat ? 'ON' : 'OFF'}`);
+      return { should_heat: shouldHeat };
+    });
+
     // --- Condition: Heating is scheduled now ---
     conditionCard.registerRunListener(async (args) => {
       const profile = this._requireProfileFromArg(args.profile_id);
       return this._isHeatingNow(profile.id);
+    });
+
+    overrideControlModeConditionCard.registerRunListener(async (args) => {
+      const profile = this._requireProfileFromArg(args.profile_id);
+      const expected = this._extractOnOffArg(args.mode);
+      const activeOverride = this._getActiveControlOverride(profile.id);
+      return (activeOverride && activeOverride.value === true) === expected;
     });
 
     this._autoPlanAllProfiles('init').catch((err) => {
@@ -533,6 +589,36 @@ module.exports = class PricePilotApp extends Homey.App {
     return '';
   }
 
+  _extractOnOffArg(value) {
+    const raw = value && typeof value === 'object' && value.id !== undefined ? value.id : value;
+    const normalized = String(raw || '').trim().toLowerCase();
+    if (normalized === 'on' || normalized === 'true' || normalized === '1') return true;
+    if (normalized === 'off' || normalized === 'false' || normalized === '0') return false;
+    throw new Error('Override control mode must be on or off');
+  }
+
+  _durationArgsToMs(durationArg, unitArg) {
+    const rawUnit = unitArg && typeof unitArg === 'object' && unitArg.id !== undefined ? unitArg.id : unitArg;
+    const unit = String(rawUnit || 'minutes').trim().toLowerCase();
+    if (unit === 'indefinite') return 0;
+
+    const duration = Number(durationArg);
+    if (!Number.isFinite(duration) || duration < 0) {
+      throw new Error('Override duration must be 0 or higher');
+    }
+    if (duration === 0) return 0;
+
+    const multipliers = {
+      seconds: 1000,
+      minutes: 60 * 1000,
+      hours: 60 * 60 * 1000,
+    };
+    if (!multipliers[unit]) {
+      throw new Error('Override duration unit must be seconds, minutes, hours, or indefinite');
+    }
+    return Math.round(duration * multipliers[unit]);
+  }
+
   _getProfiles() {
     const raw = this.homey.settings.get('boilerProfiles');
     if (!Array.isArray(raw) || raw.length === 0) {
@@ -648,6 +734,16 @@ module.exports = class PricePilotApp extends Homey.App {
   }
 
   _isHeatingNow(planId) {
+    const activeOverride = this._getActiveControlOverride(planId);
+    if (activeOverride && activeOverride.value === true) {
+      this._patchRuntime(planId, {
+        planState: 'override',
+        heaterShouldBeOn: true,
+        updatedAt: new Date().toISOString(),
+      });
+      return true;
+    }
+
     const profile = this._getProfiles().find((p) => p.id === this._sanitizeProfileId(planId));
     if (profile && profile.controlMode === 'fixed_window') {
       const now = new Date();
@@ -693,6 +789,28 @@ module.exports = class PricePilotApp extends Homey.App {
       updatedAt: now.toISOString(),
     });
     return on;
+  }
+
+  _getActiveControlOverride(planId) {
+    const runtime = this._getRuntime(planId) || {};
+    if (!runtime.controlOverrideEnabled || runtime.controlOverrideValue !== true) {
+      return null;
+    }
+
+    if (runtime.controlOverrideExpiresAt) {
+      const expiresAt = new Date(runtime.controlOverrideExpiresAt);
+      if (isNaN(expiresAt.getTime()) || Date.now() >= expiresAt.getTime()) {
+        this._patchRuntime(planId, {
+          controlOverrideEnabled: false,
+          controlOverrideValue: null,
+          controlOverrideExpiredAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+        return null;
+      }
+    }
+
+    return { value: true };
   }
 
   async _syncHeatingStateAndTrigger(planId, source) {

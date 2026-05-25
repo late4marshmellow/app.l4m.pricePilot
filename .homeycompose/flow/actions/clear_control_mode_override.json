@@ -1,0 +1,30 @@
+{
+  "id": "clear_control_mode_override",
+  "title": {
+    "en": "Clear control mode override"
+  },
+  "titleFormatted": {
+    "en": "Clear control mode override for [[profile_id]]"
+  },
+  "hint": {
+    "en": "Clears the active override for the selected profile and resumes normal price or fixed-window operation."
+  },
+  "args": [
+    {
+      "type": "autocomplete",
+      "name": "profile_id",
+      "title": {
+        "en": "Boiler profile"
+      }
+    }
+  ],
+  "tokens": [
+    {
+      "name": "should_heat",
+      "type": "boolean",
+      "title": {
+        "en": "Should heat now"
+      }
+    }
+  ]
+}

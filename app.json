@@ -160,9 +160,155 @@
             }
           }
         ]
+      },
+      {
+        "id": "override_control_mode_is",
+        "title": {
+          "en": "Override control mode for [[profile_id]] is [[mode]]"
+        },
+        "titleFormatted": {
+          "en": "Override control mode for [[profile_id]] is [[mode]]"
+        },
+        "hint": {
+          "en": "Checks whether the selected profile currently has an active control mode override. Expired overrides count as off."
+        },
+        "args": [
+          {
+            "type": "autocomplete",
+            "name": "profile_id",
+            "title": {
+              "en": "Boiler profile"
+            }
+          },
+          {
+            "type": "dropdown",
+            "name": "mode",
+            "title": {
+              "en": "Override"
+            },
+            "values": [
+              {
+                "id": "on",
+                "label": {
+                  "en": "On"
+                }
+              },
+              {
+                "id": "off",
+                "label": {
+                  "en": "Off"
+                }
+              }
+            ]
+          }
+        ]
       }
     ],
     "actions": [
+      {
+        "id": "clear_control_mode_override",
+        "title": {
+          "en": "Clear control mode override"
+        },
+        "titleFormatted": {
+          "en": "Clear control mode override for [[profile_id]]"
+        },
+        "hint": {
+          "en": "Clears the active override for the selected profile and resumes normal price or fixed-window operation."
+        },
+        "args": [
+          {
+            "type": "autocomplete",
+            "name": "profile_id",
+            "title": {
+              "en": "Boiler profile"
+            }
+          }
+        ],
+        "tokens": [
+          {
+            "name": "should_heat",
+            "type": "boolean",
+            "title": {
+              "en": "Should heat now"
+            }
+          }
+        ]
+      },
+      {
+        "id": "override_control_mode",
+        "title": {
+          "en": "Override control mode on"
+        },
+        "titleFormatted": {
+          "en": "Override control mode ON for [[profile_id]] for [[duration]] [[duration_unit]]"
+        },
+        "hint": {
+          "en": "Forces the selected profile ON for the selected duration. Select indefinite to ignore the duration value and keep the override until it is cleared."
+        },
+        "args": [
+          {
+            "type": "autocomplete",
+            "name": "profile_id",
+            "title": {
+              "en": "Boiler profile"
+            }
+          },
+          {
+            "type": "number",
+            "name": "duration",
+            "min": 0,
+            "title": {
+              "en": "Duration"
+            },
+            "placeholder": {
+              "en": "0"
+            }
+          },
+          {
+            "type": "dropdown",
+            "name": "duration_unit",
+            "title": {
+              "en": "Unit"
+            },
+            "values": [
+              {
+                "id": "seconds",
+                "label": {
+                  "en": "seconds"
+                }
+              },
+              {
+                "id": "minutes",
+                "label": {
+                  "en": "minutes"
+                }
+              },
+              {
+                "id": "hours",
+                "label": {
+                  "en": "hours"
+                }
+              },
+              {
+                "id": "indefinite",
+                "label": {
+                  "en": "indefinite"
+                }
+              }
+            ]
+          }
+        ],
+        "tokens": [
+          {
+            "name": "should_heat",
+            "type": "boolean",
+            "title": {
+              "en": "Should heat now"
+            }
+          }
+        ]
+      },
       {
         "id": "plan_heating",
         "title": {

@@ -94,12 +94,25 @@ PricePilot can work in two ways:
   Input: `profile_id`, `price_slots` JSON
   Output token: `should_heat`
 
-Use this when prices come from another app, script, API, or Homey flow instead of Nordpool auto fetch.
+- `Override control mode on`
+  Input: `profile_id`, `duration`, `duration_unit`
+  Output token: `should_heat`
+
+- `Clear control mode override`
+  Input: `profile_id`
+  Output token: `should_heat`
+
+Use `Override control mode on` to force the selected profile to heat, regardless of price plan or fixed window. The override lasts for the selected duration; `0` or unit `indefinite` means indefinite. Use `Clear control mode override` to resume normal operation.
+
+Use `Plan heating with custom prices` when prices come from another app, script, API, or Homey flow instead of Nordpool auto fetch.
 
 ### Condition cards
 
 - `Heating is scheduled now`
   Returns `true` when the selected profile should currently be heating.
+
+- `Override control mode is`
+  Returns `true` when the selected profile override state matches `On` or `Off`.
 
 ### Trigger cards
 

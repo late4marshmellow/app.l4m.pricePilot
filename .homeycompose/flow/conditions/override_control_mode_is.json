@@ -1,0 +1,42 @@
+{
+  "id": "override_control_mode_is",
+  "title": {
+    "en": "Override control mode for [[profile_id]] is [[mode]]"
+  },
+  "titleFormatted": {
+    "en": "Override control mode for [[profile_id]] is [[mode]]"
+  },
+  "hint": {
+    "en": "Checks whether the selected profile currently has an active control mode override. Expired overrides count as off."
+  },
+  "args": [
+    {
+      "type": "autocomplete",
+      "name": "profile_id",
+      "title": {
+        "en": "Boiler profile"
+      }
+    },
+    {
+      "type": "dropdown",
+      "name": "mode",
+      "title": {
+        "en": "Override"
+      },
+      "values": [
+        {
+          "id": "on",
+          "label": {
+            "en": "On"
+          }
+        },
+        {
+          "id": "off",
+          "label": {
+            "en": "Off"
+          }
+        }
+      ]
+    }
+  ]
+}
