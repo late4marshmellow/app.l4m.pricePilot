@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script type="text/javascript" src="/homey.js" data-origin="settings"></script>
   <style>
     :root {
@@ -60,6 +61,35 @@
 
     .grid-3 {
       grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .config-section {
+      margin-top: 12px;
+      padding: 12px;
+      border: 1px solid #cbded2;
+      border-radius: 10px;
+      background: #fff;
+      box-shadow: 0 2px 8px rgba(18, 59, 36, 0.04);
+    }
+
+    .config-section label {
+      color: #315a43;
+      font-weight: 600;
+    }
+
+    .grid > div {
+      min-width: 0;
+    }
+
+    #fixedWindowStart,
+    #fixedWindowEnd {
+      display: block;
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
+      box-sizing: border-box;
+      padding: 0 !important;
+      min-height: 42px;
     }
 
     label {
@@ -418,7 +448,7 @@
 
       <div class="card" style="margin-top: 10px; background: #f8fcf9;">
         <div id="editModeInfo" style="display:none; margin-bottom:8px; padding:8px 10px; border:1px solid #cbe6d6; background:#eef8f1; color:#1f6d43; border-radius:8px; font-size:0.9em;"></div>
-        <div class="grid grid-2">
+        <div class="grid grid-2 config-section">
           <div>
             <label for="profileName">Profile name</label>
             <input id="profileName" type="text" placeholder="Main boiler" />
@@ -427,15 +457,27 @@
           <input id="profileId" type="hidden" />
         </div>
 
-        <div class="grid grid-3" style="margin-top: 8px;">
+        <div class="grid grid-3 config-section" style="margin-top: 8px;">
           <div style="grid-column: 1 / -1;">
-            <label for="sensorFilter">Lookup temperature sensor</label>
+            <label for="controlFilter">Heater control device</label>
             <div style="display:flex; gap:8px; margin-bottom:6px;">
-              <input id="sensorFilter" type="text" placeholder="Filter by device name..." style="flex:1;" />
-              <button class="btn-secondary" id="refreshSensors" type="button" style="white-space:nowrap;">Refresh</button>
+              <input id="controlFilter" type="text" placeholder="Search control devices by name..." style="flex:1;" />
+              <button class="btn-secondary" id="refreshSensors" type="button" style="white-space:nowrap;">Refresh devices</button>
             </div>
-            <select id="sensorLookup" size="6" style="width:100%; font-size:0.97em;">
-              <option value="">-- Refresh to load sensors --</option>
+            <select id="controlLookup" style="width:100%; font-size:0.97em;">
+              <option value="">-- Select the heater control device --</option>
+            </select>
+            <div id="controlCount" style="font-size:0.8em; color:#888; margin-top:3px;"></div>
+            <div id="selectedControlInfo" style="font-size:0.85em; margin-top:6px; color:#35624a;"></div>
+          </div>
+        </div>
+
+        <div class="grid grid-3 config-section" style="margin-top: 8px;">
+          <div style="grid-column: 1 / -1;">
+            <label for="sensorFilter">Temperature capability</label>
+            <input id="sensorFilter" type="text" placeholder="Search capabilities by device, name, or ID..." style="width:100%; margin-bottom:6px;" />
+            <select id="sensorLookup" style="width:100%; font-size:0.97em;">
+              <option value="">-- Select a temperature capability --</option>
             </select>
             <div id="sensorCount" style="font-size:0.8em; color:#888; margin-top:3px;"></div>
             <div id="selectedSensorInfo" style="font-size:0.85em; margin-top:6px; color:#35624a;"></div>
@@ -449,31 +491,19 @@
         <input id="controlDeviceId" type="hidden" />
         <input id="controlCapabilityId" type="hidden" value="onoff" />
 
-        <div class="grid grid-3" style="margin-top: 8px;">
+        <div class="grid grid-3 config-section" style="margin-top: 8px;">
           <div style="grid-column: 1 / -1;">
-            <label for="controlFilter">Lookup control device</label>
-            <input id="controlFilter" type="text" placeholder="Filter control devices..." style="width:100%; margin-bottom:6px;" />
-            <select id="controlLookup" size="5" style="width:100%; font-size:0.97em;">
-              <option value="">-- Refresh to load control devices --</option>
-            </select>
-            <div id="controlCount" style="font-size:0.8em; color:#888; margin-top:3px;"></div>
-            <div id="selectedControlInfo" style="font-size:0.85em; margin-top:6px; color:#35624a;"></div>
-          </div>
-        </div>
-
-        <div class="grid grid-3" style="margin-top: 8px;">
-          <div style="grid-column: 1 / -1;">
-            <label for="powerFilter">Lookup power monitor</label>
-            <input id="powerFilter" type="text" placeholder="Filter power sensors..." style="width:100%; margin-bottom:6px;" />
-            <select id="powerLookup" size="5" style="width:100%; font-size:0.97em;">
-              <option value="">-- Refresh to load power sensors --</option>
+            <label for="powerFilter">Power capability (optional)</label>
+            <input id="powerFilter" type="text" placeholder="Search capabilities by device, name, or ID..." style="width:100%; margin-bottom:6px;" />
+            <select id="powerLookup" style="width:100%; font-size:0.97em;">
+              <option value="">-- Select a power capability --</option>
             </select>
             <div id="powerCount" style="font-size:0.8em; color:#888; margin-top:3px;"></div>
             <div id="selectedPowerInfo" style="font-size:0.85em; margin-top:6px; color:#35624a;"></div>
           </div>
         </div>
 
-        <div class="grid grid-3" style="margin-top: 8px;">
+        <div class="grid grid-3 config-section" style="margin-top: 8px;">
           <div>
             <label for="controlMode">Control mode</label>
             <select id="controlMode">
@@ -491,7 +521,7 @@
           </div>
         </div>
 
-        <div class="grid grid-3" style="margin-top: 8px;">
+        <div class="grid grid-3 config-section" style="margin-top: 8px;">
           <div>
             <label for="fixedMinTempMonitor">Fixed mode: monitor minimum temperature</label>
             <select id="fixedMinTempMonitor">
@@ -501,7 +531,7 @@
           </div>
         </div>
 
-        <div class="grid grid-3" style="margin-top: 8px;">
+        <div class="grid grid-3 config-section" style="margin-top: 8px;">
           <div>
             <label for="tempCorrection">Temperature correction (C)</label>
             <input id="tempCorrection" type="number" step="0.1" value="0" />
@@ -520,7 +550,7 @@
           </div>
         </div>
 
-        <div class="grid grid-3" style="margin-top: 8px;">
+        <div class="grid grid-3 config-section" style="margin-top: 8px;">
           <div>
             <label for="minTemp">Minimum temperature (C)</label>
             <input id="minTemp" type="number" min="1" step="0.1" value="45" />
@@ -644,15 +674,14 @@
     var profiles = [];
     var selectedId = null;
     var runtimeById = {};
+    var capabilityCatalog = [];
+    var capabilityCatalogUpdatedAt = null;
+    var capabilityCatalogError = null;
     var sensorCatalog = [];
-    var sensorCatalogUpdatedAt = null;
-    var sensorCatalogError = null;
     var controlCatalog = [];
     var controlCatalogUpdatedAt = null;
     var controlCatalogError = null;
     var powerCatalog = [];
-    var powerCatalogUpdatedAt = null;
-    var powerCatalogError = null;
 
     function showStatus(msg, isError) {
       statusEl.textContent = msg;
@@ -1006,11 +1035,11 @@
       if (hit) {
         var capLabel = hit.capabilityTitle && hit.capabilityTitle !== hit.capabilityId ? hit.capabilityTitle : hit.capabilityId;
         var valText = (hit.currentValue !== null && hit.currentValue !== undefined)
-          ? (' | Current: ' + hit.currentValue + (hit.units || '°C'))
+          ? (' | Current: ' + hit.currentValue + (hit.units ? ' ' + hit.units : ''))
           : '';
         selectedSensorInfoEl.textContent = 'Selected sensor: ' + hit.deviceName + ' · ' + capLabel + valText;
       } else {
-        selectedSensorInfoEl.textContent = 'Selected sensor: saved device (' + devId + ')';
+        selectedSensorInfoEl.textContent = 'Selected sensor: saved capability ' + capId + ' on device ' + devId;
       }
     }
 
@@ -1048,11 +1077,11 @@
       if (hit) {
         var capLabel = hit.capabilityTitle && hit.capabilityTitle !== hit.capabilityId ? hit.capabilityTitle : hit.capabilityId;
         var valText = (hit.currentValue !== null && hit.currentValue !== undefined)
-          ? (' | Current: ' + hit.currentValue + (hit.units || 'W'))
+          ? (' | Current: ' + hit.currentValue + (hit.units ? ' ' + hit.units : ''))
           : '';
         selectedPowerInfoEl.textContent = 'Selected power monitor: ' + hit.deviceName + ' · ' + capLabel + valText;
       } else {
-        selectedPowerInfoEl.textContent = 'Selected power monitor: saved device (' + devId + ')';
+        selectedPowerInfoEl.textContent = 'Selected power capability: ' + capId + ' on device ' + devId;
       }
     }
 
@@ -1077,6 +1106,12 @@
       form.fixedWindowStart.value = profile.fixedWindowStart || '22:00';
       form.fixedWindowEnd.value = profile.fixedWindowEnd || '06:00';
       selectedId = profile.id;
+      form.controlFilter.value = '';
+      form.sensorFilter.value = '';
+      form.powerFilter.value = '';
+      renderControlLookupOptions('');
+      renderSensorLookupOptions();
+      renderPowerLookupOptions();
       updateModeUi();
       updateEditModeInfo();
       updateSelectedSensorInfo();
@@ -1105,6 +1140,12 @@
       form.fixedWindowStart.value = '22:00';
       form.fixedWindowEnd.value = '06:00';
       selectedId = null;
+      form.controlFilter.value = '';
+      form.sensorFilter.value = '';
+      form.powerFilter.value = '';
+      renderControlLookupOptions('');
+      renderSensorLookupOptions();
+      renderPowerLookupOptions();
       updateModeUi();
       updateEditModeInfo();
       updateSelectedSensorInfo();
@@ -1247,52 +1288,123 @@
       });
     }
 
-    function renderSensorLookupOptions(filterText) {
-      var q = (filterText || '').trim().toLowerCase();
-      var filtered = q
-        ? sensorCatalog.filter(function (s) {
-            return (s.deviceName + ' ' + s.capabilityTitle + ' ' + s.capabilityId).toLowerCase().includes(q);
-          })
-        : sensorCatalog;
+    function renderCapabilityOptions(selectEl, filterInput, selectedDeviceId, selectedCapabilityId, countId, kind) {
+      var query = (filterInput.value || '').trim().toLowerCase();
+      var matches = capabilityCatalog.filter(function (entry) {
+        var searchable = [
+          entry.deviceName,
+          entry.deviceId,
+          entry.capabilityTitle,
+          entry.capabilityId,
+          entry.type,
+          entry.units
+        ].join(' ').toLowerCase();
+        return !query || searchable.includes(query);
+      });
+      var selectedEntry = capabilityCatalog.find(function (entry) {
+        return entry.deviceId === selectedDeviceId && entry.capabilityId === selectedCapabilityId;
+      });
+      if (selectedEntry && matches.indexOf(selectedEntry) < 0) matches.unshift(selectedEntry);
 
-      var options = [];
-      if (filtered.length === 0) {
-        options.push('<option value="" disabled>' + (sensorCatalog.length === 0 ? '-- Press Refresh to discover sensors --' : 'No match for "' + (filterText || '').replace(/</g,'&lt;') + '"') + '</option>');
-      } else {
-        filtered.forEach(function (s) {
-          var origIdx = sensorCatalog.indexOf(s);
-          var capLabel = s.capabilityTitle && s.capabilityTitle !== s.capabilityId ? s.capabilityTitle : s.capabilityId;
-          var valStr = '';
-          if (s.currentValue !== null && s.currentValue !== undefined) {
-            valStr = '  →  ' + (typeof s.currentValue === 'number' ? s.currentValue.toFixed(1) : s.currentValue) + (s.units || '°C');
-          }
-          var label = s.deviceName + '  ·  ' + capLabel + valStr;
-          options.push('<option value="' + origIdx + '">' + label + '</option>');
-        });
+      var preferredDeviceId = form.controlDeviceId.value || '';
+      matches.sort(function (a, b) {
+        var aPreferred = a.deviceId === preferredDeviceId;
+        var bPreferred = b.deviceId === preferredDeviceId;
+        if (aPreferred !== bPreferred) return aPreferred ? -1 : 1;
+        var nameOrder = a.deviceName.localeCompare(b.deviceName);
+        if (nameOrder) return nameOrder;
+        var deviceOrder = a.deviceId.localeCompare(b.deviceId);
+        return deviceOrder || a.capabilityId.localeCompare(b.capabilityId);
+      });
+
+      selectEl.innerHTML = '';
+      var placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = matches.length
+        ? '-- Choose a ' + kind + ' capability --'
+        : (query ? '-- No capabilities match this search --' : '-- No device capabilities found; refresh devices --');
+      selectEl.appendChild(placeholder);
+      var hasSavedSelection = !selectedEntry && selectedDeviceId && selectedCapabilityId;
+      if (hasSavedSelection) {
+        var savedOption = document.createElement('option');
+        savedOption.value = '__saved_capability__';
+        savedOption.textContent = 'Saved capability: ' + selectedCapabilityId + ' (' + selectedDeviceId + ')';
+        selectEl.appendChild(savedOption);
       }
-      form.sensorLookup.innerHTML = options.join('');
 
-      var countEl = document.getElementById('sensorCount');
-      if (countEl) {
-        if (sensorCatalog.length === 0) {
-          countEl.textContent = '';
-        } else if (q) {
-          countEl.textContent = filtered.length + ' of ' + sensorCatalog.length + ' sensors match';
-        } else {
-          countEl.textContent = sensorCatalog.length + ' sensors found';
+      var groups = new Map();
+      matches.forEach(function (entry) {
+        var group = groups.get(entry.deviceId);
+        if (!group) {
+          group = document.createElement('optgroup');
+          group.label = entry.deviceId === preferredDeviceId
+            ? 'Control device: ' + entry.deviceName
+            : entry.deviceName;
+          groups.set(entry.deviceId, group);
+          selectEl.appendChild(group);
         }
+
+        var option = document.createElement('option');
+        var index = capabilityCatalog.indexOf(entry);
+        option.value = String(index);
+        var title = entry.capabilityTitle && entry.capabilityTitle !== entry.capabilityId
+          ? entry.capabilityTitle + ' (' + entry.capabilityId + ')'
+          : entry.capabilityId;
+        var valueText = entry.currentValue !== null && entry.currentValue !== undefined
+          ? '  |  ' + entry.currentValue + (entry.units ? ' ' + entry.units : '')
+          : '';
+        option.textContent = title + valueText;
+        group.appendChild(option);
+      });
+
+      if (selectedEntry) {
+        selectEl.value = String(capabilityCatalog.indexOf(selectedEntry));
+      } else if (hasSavedSelection) {
+        selectEl.value = '__saved_capability__';
+      }
+      var countEl = document.getElementById(countId);
+      if (countEl) {
+        countEl.textContent = query
+          ? matches.length + ' matching capabilities; the selected control device is listed first'
+          : capabilityCatalog.length + ' capabilities across all devices; the selected control device is listed first';
       }
     }
 
-    function loadSensorCatalog(done) {
-      Homey.get('boilerSensorCatalog', function (err, val) {
-        sensorCatalog = (!err && Array.isArray(val)) ? val : [];
-        Homey.get('boilerSensorCatalogUpdatedAt', function (err2, updatedAt) {
-          sensorCatalogUpdatedAt = (!err2 && updatedAt) ? String(updatedAt) : null;
-          Homey.get('boilerSensorCatalogError', function (err3, catalogErr) {
-            sensorCatalogError = (!err3 && catalogErr) ? String(catalogErr) : null;
-            renderSensorLookupOptions(form.sensorFilter ? form.sensorFilter.value : '');
+    function renderSensorLookupOptions() {
+      renderCapabilityOptions(
+        form.sensorLookup,
+        form.sensorFilter,
+        form.tempDeviceId.value,
+        form.tempCapabilityId.value,
+        'sensorCount',
+        'temperature'
+      );
+    }
+
+    function renderPowerLookupOptions() {
+      renderCapabilityOptions(
+        form.powerLookup,
+        form.powerFilter,
+        form.powerDeviceId.value,
+        form.powerCapabilityId.value,
+        'powerCount',
+        'power'
+      );
+    }
+
+    function loadCapabilityCatalog(done) {
+      Homey.get('boilerCapabilityCatalog', function (err, val) {
+        capabilityCatalog = (!err && Array.isArray(val)) ? val : [];
+        sensorCatalog = capabilityCatalog;
+        powerCatalog = capabilityCatalog;
+        Homey.get('boilerCapabilityCatalogUpdatedAt', function (err2, updatedAt) {
+          capabilityCatalogUpdatedAt = (!err2 && updatedAt) ? String(updatedAt) : null;
+          Homey.get('boilerCapabilityCatalogError', function (err3, catalogErr) {
+            capabilityCatalogError = (!err3 && catalogErr) ? String(catalogErr) : null;
+            renderSensorLookupOptions();
+            renderPowerLookupOptions();
             updateSelectedSensorInfo();
+            updateSelectedPowerInfo();
             if (typeof done === 'function') done();
           });
         });
@@ -1300,38 +1412,47 @@
     }
 
     function renderControlLookupOptions(filterText) {
-      var q = (filterText || '').trim().toLowerCase();
-      var filtered = q
-        ? controlCatalog.filter(function (s) {
-            return (s.deviceName + ' ' + s.capabilityTitle + ' ' + s.capabilityId).toLowerCase().includes(q);
-          })
-        : controlCatalog;
+      var query = (filterText || '').trim().toLowerCase();
+      var devicesById = new Map();
+      controlCatalog.forEach(function (entry) {
+        if (!devicesById.has(entry.deviceId)) devicesById.set(entry.deviceId, entry);
+      });
+      var devices = Array.from(devicesById.values()).filter(function (entry) {
+        return !query || (entry.deviceName + ' ' + entry.deviceId).toLowerCase().includes(query);
+      });
+      var selectedDevice = devicesById.get(form.controlDeviceId.value);
+      if (selectedDevice && devices.indexOf(selectedDevice) < 0) devices.unshift(selectedDevice);
+      devices.sort(function (a, b) {
+        if (a.deviceId === form.controlDeviceId.value) return -1;
+        if (b.deviceId === form.controlDeviceId.value) return 1;
+        var nameOrder = a.deviceName.localeCompare(b.deviceName);
+        return nameOrder || a.deviceId.localeCompare(b.deviceId);
+      });
 
-      var options = [];
-      if (filtered.length === 0) {
-        options.push('<option value="" disabled>' + (controlCatalog.length === 0 ? '-- Press Refresh to discover control devices --' : 'No match for "' + (filterText || '').replace(/</g,'&lt;') + '"') + '</option>');
-      } else {
-        filtered.forEach(function (s) {
-          var origIdx = controlCatalog.indexOf(s);
-          var capLabel = s.capabilityTitle && s.capabilityTitle !== s.capabilityId ? s.capabilityTitle : s.capabilityId;
-          var valStr = '';
-          if (s.currentValue !== null && s.currentValue !== undefined) {
-            valStr = '  →  ' + s.currentValue;
-          }
-          options.push('<option value="' + origIdx + '">' + s.deviceName + '  ·  ' + capLabel + valStr + '</option>');
-        });
+      form.controlLookup.innerHTML = '';
+      var placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = devices.length ? '-- Select heater control device --' : '-- No on/off control devices found --';
+      form.controlLookup.appendChild(placeholder);
+      devices.forEach(function (entry) {
+        var option = document.createElement('option');
+        option.value = entry.deviceId;
+        option.textContent = entry.deviceName;
+        form.controlLookup.appendChild(option);
+      });
+      if (form.controlDeviceId.value && !devicesById.has(form.controlDeviceId.value)) {
+        var savedOption = document.createElement('option');
+        savedOption.value = form.controlDeviceId.value;
+        savedOption.textContent = 'Saved control device (' + form.controlDeviceId.value + ')';
+        form.controlLookup.appendChild(savedOption);
       }
-      form.controlLookup.innerHTML = options.join('');
+      form.controlLookup.value = form.controlDeviceId.value || '';
 
       var countEl = document.getElementById('controlCount');
       if (countEl) {
-        if (controlCatalog.length === 0) {
-          countEl.textContent = '';
-        } else if (q) {
-          countEl.textContent = filtered.length + ' of ' + controlCatalog.length + ' control devices match';
-        } else {
-          countEl.textContent = controlCatalog.length + ' control devices found';
-        }
+        countEl.textContent = query
+          ? devices.length + ' control devices match'
+          : devices.length + ' devices with an on/off capability';
       }
     }
 
@@ -1342,59 +1463,8 @@
           controlCatalogUpdatedAt = (!err2 && updatedAt) ? String(updatedAt) : null;
           Homey.get('boilerControlCatalogError', function (err3, catalogErr) {
             controlCatalogError = (!err3 && catalogErr) ? String(catalogErr) : null;
-            renderControlLookupOptions(form.controlFilter ? form.controlFilter.value : '');
+            renderControlLookupOptions(form.controlFilter.value);
             updateSelectedControlInfo();
-            if (typeof done === 'function') done();
-          });
-        });
-      });
-    }
-
-    function renderPowerLookupOptions(filterText) {
-      var q = (filterText || '').trim().toLowerCase();
-      var filtered = q
-        ? powerCatalog.filter(function (s) {
-            return (s.deviceName + ' ' + s.capabilityTitle + ' ' + s.capabilityId).toLowerCase().includes(q);
-          })
-        : powerCatalog;
-
-      var options = [];
-      if (filtered.length === 0) {
-        options.push('<option value="" disabled>' + (powerCatalog.length === 0 ? '-- Press Refresh to discover power sensors --' : 'No match for "' + (filterText || '').replace(/</g,'&lt;') + '"') + '</option>');
-      } else {
-        filtered.forEach(function (s) {
-          var origIdx = powerCatalog.indexOf(s);
-          var capLabel = s.capabilityTitle && s.capabilityTitle !== s.capabilityId ? s.capabilityTitle : s.capabilityId;
-          var valStr = '';
-          if (s.currentValue !== null && s.currentValue !== undefined) {
-            valStr = '  →  ' + (typeof s.currentValue === 'number' ? s.currentValue.toFixed(1) : s.currentValue) + (s.units || 'W');
-          }
-          options.push('<option value="' + origIdx + '">' + s.deviceName + '  ·  ' + capLabel + valStr + '</option>');
-        });
-      }
-      form.powerLookup.innerHTML = options.join('');
-
-      var countEl = document.getElementById('powerCount');
-      if (countEl) {
-        if (powerCatalog.length === 0) {
-          countEl.textContent = '';
-        } else if (q) {
-          countEl.textContent = filtered.length + ' of ' + powerCatalog.length + ' power sensors match';
-        } else {
-          countEl.textContent = powerCatalog.length + ' power sensors found';
-        }
-      }
-    }
-
-    function loadPowerCatalog(done) {
-      Homey.get('boilerPowerCatalog', function (err, val) {
-        powerCatalog = (!err && Array.isArray(val)) ? val : [];
-        Homey.get('boilerPowerCatalogUpdatedAt', function (err2, updatedAt) {
-          powerCatalogUpdatedAt = (!err2 && updatedAt) ? String(updatedAt) : null;
-          Homey.get('boilerPowerCatalogError', function (err3, catalogErr) {
-            powerCatalogError = (!err3 && catalogErr) ? String(catalogErr) : null;
-            renderPowerLookupOptions(form.powerFilter ? form.powerFilter.value : '');
-            updateSelectedPowerInfo();
             if (typeof done === 'function') done();
           });
         });
@@ -1426,7 +1496,7 @@
     form.fixedMinTempMonitor.addEventListener('change', updateModeUi);
 
     form.sensorFilter.addEventListener('input', function () {
-      renderSensorLookupOptions(form.sensorFilter.value);
+      renderSensorLookupOptions();
     });
 
     form.controlFilter.addEventListener('input', function () {
@@ -1434,30 +1504,49 @@
     });
 
     form.powerFilter.addEventListener('input', function () {
-      renderPowerLookupOptions(form.powerFilter.value);
+      renderPowerLookupOptions();
     });
 
-    form.sensorLookup.addEventListener('change', function () {      var idx = Number(form.sensorLookup.value);
-      if (!Number.isInteger(idx) || idx < 0 || idx >= sensorCatalog.length) return;
-      var picked = sensorCatalog[idx];
+    form.sensorLookup.addEventListener('change', function () {
+      if (!form.sensorLookup.value) {
+        form.tempDeviceId.value = '';
+        form.tempCapabilityId.value = '';
+        updateSelectedSensorInfo();
+        return;
+      }
+      var idx = Number(form.sensorLookup.value);
+      if (!Number.isInteger(idx) || idx < 0 || idx >= capabilityCatalog.length) return;
+      var picked = capabilityCatalog[idx];
       form.tempDeviceId.value = picked.deviceId;
       form.tempCapabilityId.value = picked.capabilityId;
       updateSelectedSensorInfo();
     });
 
     form.controlLookup.addEventListener('change', function () {
-      var idx = Number(form.controlLookup.value);
-      if (!Number.isInteger(idx) || idx < 0 || idx >= controlCatalog.length) return;
-      var picked = controlCatalog[idx];
-      form.controlDeviceId.value = picked.deviceId;
-      form.controlCapabilityId.value = picked.capabilityId;
+      var deviceId = form.controlLookup.value;
+      form.controlDeviceId.value = deviceId;
+      var deviceCapabilities = controlCatalog.filter(function (entry) {
+        return entry.deviceId === deviceId;
+      });
+      var picked = deviceCapabilities.find(function (entry) {
+        return entry.capabilityId === form.controlCapabilityId.value;
+      }) || deviceCapabilities[0];
+      form.controlCapabilityId.value = picked ? picked.capabilityId : 'onoff';
       updateSelectedControlInfo();
+      renderSensorLookupOptions();
+      renderPowerLookupOptions();
     });
 
     form.powerLookup.addEventListener('change', function () {
+      if (!form.powerLookup.value) {
+        form.powerDeviceId.value = '';
+        form.powerCapabilityId.value = '';
+        updateSelectedPowerInfo();
+        return;
+      }
       var idx = Number(form.powerLookup.value);
-      if (!Number.isInteger(idx) || idx < 0 || idx >= powerCatalog.length) return;
-      var picked = powerCatalog[idx];
+      if (!Number.isInteger(idx) || idx < 0 || idx >= capabilityCatalog.length) return;
+      var picked = capabilityCatalog[idx];
       form.powerDeviceId.value = picked.deviceId;
       form.powerCapabilityId.value = picked.capabilityId;
       updateSelectedPowerInfo();
@@ -1467,16 +1556,17 @@
       Homey.set('boilerSensorCatalogRefreshRequest', Date.now(), function (err) {
         if (err) return showStatus(String(err), true);
         setTimeout(function () {
-          loadSensorCatalog(function () {
+          loadCapabilityCatalog(function () {
             loadControlCatalog(function () {
-              loadPowerCatalog(function () {
-                if (sensorCatalogError || controlCatalogError || powerCatalogError) {
-                  showStatus('Catalog refresh failed: ' + (sensorCatalogError || controlCatalogError || powerCatalogError), true);
-                  return;
-                }
-                var suffix = sensorCatalogUpdatedAt ? ' (updated ' + new Date(sensorCatalogUpdatedAt).toLocaleString() + ')' : '';
-                showStatus('Catalogs refreshed. Sensors: ' + sensorCatalog.length + ', controls: ' + controlCatalog.length + ', power: ' + powerCatalog.length + suffix + '.', false);
-              });
+              if (capabilityCatalogError || controlCatalogError) {
+                showStatus('Catalog refresh failed: ' + (capabilityCatalogError || controlCatalogError), true);
+                return;
+              }
+              var suffix = capabilityCatalogUpdatedAt
+                ? ' (updated ' + new Date(capabilityCatalogUpdatedAt).toLocaleString() + ')'
+                : '';
+              showStatus('Device capabilities refreshed. ' + capabilityCatalog.length + ' capabilities and '
+                + controlCatalog.length + ' control entries are available' + suffix + '.', false);
             });
           });
         }, 1200);
@@ -1697,25 +1787,23 @@
             }
 
             loadRuntime(function () {
-              loadSensorCatalog(function () {
+              loadCapabilityCatalog(function () {
                 loadControlCatalog(function () {
-                  loadPowerCatalog(function () {
-                    setFormFromProfile(profiles[0]);
-                    renderProfiles();
-                    if (sensorCatalogError || controlCatalogError || powerCatalogError) {
-                      showStatus('Loaded ' + profiles.length + ' profile(s). Catalog error: ' + (sensorCatalogError || controlCatalogError || powerCatalogError), true);
+                  setFormFromProfile(profiles[0]);
+                  renderProfiles();
+                  if (capabilityCatalogError || controlCatalogError) {
+                    showStatus('Loaded ' + profiles.length + ' profile(s). Catalog error: ' + (capabilityCatalogError || controlCatalogError), true);
+                  } else {
+                    var errors = Object.keys(runtimeById || {}).filter(function (id) {
+                      var rt = runtimeById[id];
+                      return rt && rt.controlError;
+                    });
+                    if (errors.length) {
+                      showStatus('Loaded ' + profiles.length + ' profile(s), ' + capabilityCatalog.length + ' device capabilities, ' + controlCatalog.length + ' control entries, and ' + errors.length + ' control error(s).', true);
                     } else {
-                      var errors = Object.keys(runtimeById || {}).filter(function (id) {
-                        var rt = runtimeById[id];
-                        return rt && rt.controlError;
-                      });
-                      if (errors.length) {
-                        showStatus('Loaded ' + profiles.length + ' profile(s), ' + sensorCatalog.length + ' sensors, ' + controlCatalog.length + ' control entries, ' + powerCatalog.length + ' power entries, and ' + errors.length + ' control error(s).', true);
-                      } else {
-                        showStatus('Loaded ' + profiles.length + ' profile(s), ' + sensorCatalog.length + ' sensors, ' + controlCatalog.length + ' control entries and ' + powerCatalog.length + ' power entries.', false);
-                      }
+                      showStatus('Loaded ' + profiles.length + ' profile(s), ' + capabilityCatalog.length + ' device capabilities, and ' + controlCatalog.length + ' control entries.', false);
                     }
-                  });
+                  }
                 });
               });
             });

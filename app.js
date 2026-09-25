@@ -11,6 +11,32 @@ const NORDPOOL_MAX_CACHE_AGE_HOURS = 36;
 const POWER_GOAL_REACHED_MAX_WATTS = 0.5;
 const POWER_GOAL_REACHED_MIN_ON_MINUTES = 5;
 
+function isTemperatureCapability(capabilityId, cap) {
+  const capLc = String(capabilityId || '').trim().toLowerCase();
+  const titleLc = String((cap && cap.title) || '').trim().toLowerCase();
+  const unitsLc = cap && cap.units ? String(cap.units).trim().toLowerCase() : '';
+  const capType = String((cap && cap.type) || '').trim().toLowerCase();
+  const numericValue = cap && cap.value !== undefined && cap.value !== null
+    && Number.isFinite(Number(cap.value));
+  const isNumeric = capType === 'number' || numericValue;
+  const isKnownProprietaryTemperature = /^hzc_tm_measured_value_\d+$/.test(capLc);
+  const isTemperatureUnit = ['\u00b0c', '\u2103', 'c', 'celsius'].includes(unitsLc);
+  const hasTemperatureHint = capLc.includes('temp')
+    || capLc.includes('temperature')
+    || capLc.includes('therm')
+    || capLc.includes('ntc')
+    || titleLc.includes('temp')
+    || titleLc.includes('temperature')
+    || titleLc.includes('therm')
+    || titleLc.includes('ntc');
+  const isSetpoint = capLc.startsWith('target_temperature')
+    || capLc.startsWith('desired_temperature')
+    || capLc.startsWith('setpoint_temperature');
+
+  return !isSetpoint && (isKnownProprietaryTemperature || (isNumeric && (isTemperatureUnit || hasTemperatureHint)));
+}
+
+
 module.exports = class PricePilotApp extends Homey.App {
 
   async onInit() {
@@ -1262,6 +1288,8 @@ module.exports = class PricePilotApp extends Homey.App {
 
       const catalog = [];
       const seen = new Set();
+      const capabilityCatalog = [];
+      const capabilitySeen = new Set();
       const controlCatalog = [];
       const controlSeen = new Set();
       const powerCatalog = [];
@@ -1280,6 +1308,22 @@ module.exports = class PricePilotApp extends Homey.App {
           const cap = capsObj[capId] || null;
           const capLc = String(capId).toLowerCase();
           const titleLc = String((cap && cap.title) || '').toLowerCase();
+
+          const capabilityKey = String(dev.id) + '::' + String(capId);
+          if (!capabilitySeen.has(capabilityKey)) {
+            capabilitySeen.add(capabilityKey);
+            const capValue = cap && cap.value;
+            const safeValue = capValue === null || ['string', 'number', 'boolean'].includes(typeof capValue) ? capValue : null;
+            capabilityCatalog.push({
+              deviceId: String(dev.id),
+              deviceName: dev.name || String(dev.id),
+              capabilityId: String(capId),
+              capabilityTitle: cap && cap.title ? String(cap.title) : String(capId),
+              type: cap && cap.type ? String(cap.type) : null,
+              currentValue: safeValue,
+              units: cap && cap.units ? String(cap.units) : null,
+            });
+          }
 
           const looksLikeOnOff = /(^|\.)onoff$/.test(capLc);
           if (looksLikeOnOff) {
@@ -1319,7 +1363,7 @@ module.exports = class PricePilotApp extends Homey.App {
 
           // Exclude light_temperature (Zigbee colour temperature, not a real sensor)
           if (capLc === 'light_temperature') continue;
-          const looksLikeTemp = capLc.includes('temp') || capLc.includes('temperature') || titleLc.includes('temp');
+          const looksLikeTemp = isTemperatureCapability(capId, cap);
           if (!looksLikeTemp) continue;
           tempLikeCandidates++;
 
@@ -1344,6 +1388,12 @@ module.exports = class PricePilotApp extends Homey.App {
         return an.localeCompare(bn);
       });
 
+      capabilityCatalog.sort((a, b) => {
+        const an = (a.deviceName + ' ' + a.capabilityId).toLowerCase();
+        const bn = (b.deviceName + ' ' + b.capabilityId).toLowerCase();
+        return an.localeCompare(bn);
+      });
+
       controlCatalog.sort((a, b) => {
         const an = `${a.deviceName} ${a.capabilityId}`.toLowerCase();
         const bn = `${b.deviceName} ${b.capabilityId}`.toLowerCase();
@@ -1358,6 +1408,7 @@ module.exports = class PricePilotApp extends Homey.App {
 
       this.log(`Temp-like capability candidates: ${tempLikeCandidates}`);
       this.log(`Sensor catalog entries stored: ${catalog.length}`);
+      this.log(`All device capability entries stored: ${capabilityCatalog.length}`);
       this.log(`Control catalog entries stored: ${controlCatalog.length}`);
       this.log(`Power catalog entries stored: ${powerCatalog.length}`);
       if (catalog.length > 0) {
@@ -1367,6 +1418,9 @@ module.exports = class PricePilotApp extends Homey.App {
       this.homey.settings.set('boilerSensorCatalog', catalog);
       this.homey.settings.set('boilerSensorCatalogUpdatedAt', new Date().toISOString());
       this.homey.settings.set('boilerSensorCatalogError', null);
+      this.homey.settings.set('boilerCapabilityCatalog', capabilityCatalog);
+      this.homey.settings.set('boilerCapabilityCatalogUpdatedAt', new Date().toISOString());
+      this.homey.settings.set('boilerCapabilityCatalogError', null);
       this.homey.settings.set('boilerControlCatalog', controlCatalog);
       this.homey.settings.set('boilerControlCatalogUpdatedAt', new Date().toISOString());
       this.homey.settings.set('boilerControlCatalogError', null);
@@ -1376,6 +1430,7 @@ module.exports = class PricePilotApp extends Homey.App {
       return catalog;
     } catch (err) {
       this.homey.settings.set('boilerSensorCatalogError', err.message || String(err));
+      this.homey.settings.set('boilerCapabilityCatalogError', err.message || String(err));
       this.homey.settings.set('boilerControlCatalogError', err.message || String(err));
       this.homey.settings.set('boilerPowerCatalogError', err.message || String(err));
       throw err;
