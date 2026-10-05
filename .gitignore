@@ -1,5 +1,5 @@
 node_modules/
-
+.docs/
 
 # Added by Homey CLI
 /.homeybuild/
