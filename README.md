@@ -77,6 +77,8 @@ You can optionally assign a power monitor capability that reports live watts.
 
 If PricePilot still expects the heater to be ON, but the live power falls to `0W`, the app treats that as the boiler having reached its goal and updates the runtime state accordingly. This helps when the boiler thermostat stops heating before the temperature sensor fully catches up.
 
+Temperature readings outside `-50` to `100 C` and power readings outside `0` to `100000 W` are treated as unavailable. When Homey provides `lastUpdated` or `lastChanged` metadata, temperature readings older than 30 minutes and power readings older than 5 minutes are also unavailable. Readings without freshness metadata are accepted when their values are plausible.
+
 ## Direct control vs flows
 
 PricePilot can work in two ways:

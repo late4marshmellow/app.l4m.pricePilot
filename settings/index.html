@@ -954,6 +954,18 @@
         .replace(/^_+|_+$/g, '');
     }
 
+    function optionalNumber(value) {
+      if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) return null;
+      if (typeof value !== 'number' && typeof value !== 'string') return null;
+      var number = Number(value);
+      return Number.isFinite(number) ? number : null;
+    }
+
+    function validLowTarget(value, minTemp, targetTemp) {
+      var number = optionalNumber(value);
+      return number !== null && number > minTemp && number < targetTemp ? number : null;
+    }
+
     function defaultProfile() {
       return {
         id: 'boiler_main',
@@ -1166,7 +1178,7 @@
       var controlCapabilityId = form.controlCapabilityId.value.trim() || 'onoff';
       var minTemp = Number(form.minTemp.value);
       var targetTemp = Number(form.targetTemp.value);
-      var lowTargetTemp = form.lowTargetTemp.value === '' ? null : Number(form.lowTargetTemp.value);
+      var lowTargetTemp = optionalNumber(form.lowTargetTemp.value);
       var powerW = Number(form.powerW.value);
       var tankLiters = Number(form.tankLiters.value);
       var maxHoursSinceGoal = Number(form.maxHours.value);
@@ -1198,7 +1210,7 @@
         if (lowTargetTemp !== null) {
           if (!Number.isFinite(lowTargetTemp)) throw new Error('Low target temperature must be numeric when provided.');
           if (lowTargetTemp <= minTemp) throw new Error('Low target must be above minimum temperature.');
-          if (lowTargetTemp > targetTemp) throw new Error('Low target must not exceed target temperature.');
+          if (lowTargetTemp >= targetTemp) throw new Error('Low target must be below target temperature.');
         }
         if (!Number.isFinite(powerW) || powerW <= 0) throw new Error('Boiler power must be above 0 W.');
         if (!Number.isFinite(tankLiters) || tankLiters <= 0) throw new Error('Tank volume must be above 0 L.');
@@ -1243,9 +1255,13 @@
         var hoursText = Number.isFinite(Number(rt.hoursSinceGoal)) ? Number(rt.hoursSinceGoal).toFixed(1) + 'h' : 'n/a';
         var tempCorrection = Number.isFinite(Number(p.tempCorrection)) ? Number(p.tempCorrection) : 0;
         var correctionText = tempCorrection === 0 ? '0C' : ((tempCorrection > 0 ? '+' : '') + tempCorrection + 'C');
-        var currentTempText = Number.isFinite(Number(rt.currentTemp)) ? (Number(rt.currentTemp).toFixed(1) + 'C') : 'n/a';
-        var rawTempText = Number.isFinite(Number(rt.sensorRawTemp)) ? (Number(rt.sensorRawTemp).toFixed(1) + 'C') : 'n/a';
-        var currentPowerText = Number.isFinite(Number(rt.currentPowerW)) ? (Number(rt.currentPowerW).toFixed(1) + 'W') : 'n/a';
+        var currentTempText = rt.currentTemp !== null && rt.currentTemp !== undefined && Number.isFinite(Number(rt.currentTemp)) ? (Number(rt.currentTemp).toFixed(1) + 'C') : 'n/a';
+        var rawTempText = rt.sensorRawTemp !== null && rt.sensorRawTemp !== undefined && Number.isFinite(Number(rt.sensorRawTemp)) ? (Number(rt.sensorRawTemp).toFixed(1) + 'C') : 'n/a';
+        var currentPowerText = rt.currentPowerW !== null && rt.currentPowerW !== undefined && Number.isFinite(Number(rt.currentPowerW)) ? (Number(rt.currentPowerW).toFixed(1) + 'W') : 'n/a';
+        var measurementErrors = [];
+        if (rt.temperatureMeasurementAvailable === false) measurementErrors.push('Temperature reading unavailable');
+        if (rt.powerMeasurementAvailable === false) measurementErrors.push('Power reading unavailable');
+        measurementErrors = measurementErrors.join(' | ');
         var windowText = (rt.planWindowStart && rt.planWindowEnd)
           ? (new Date(rt.planWindowStart).toLocaleString() + ' -> ' + new Date(rt.planWindowEnd).toLocaleString())
           : 'No active window';
@@ -1272,6 +1288,7 @@
               '<div class="profile-meta">Flow ID: ' + p.id + ' | Mode: ' + modeText + ' | Min ' + p.minTemp + 'C | Target ' + p.targetTemp + 'C' + (p.lowTargetTemp ? (' | Low ' + p.lowTargetTemp + 'C') : '') + ' | Power ' + p.powerW + 'W | Volume ' + p.tankLiters + 'L | Rate ' + rateText + ' | Max ' + p.maxHoursSinceGoal + 'h</div>' +
               '<div class="profile-meta">Sensor selected: ' + (hasSensor ? 'Yes' : 'No') + ' | Power monitor selected: ' + (hasPowerMonitor ? 'Yes' : 'No') + ' | Direct control selected: ' + (hasControl ? 'Yes' : 'No') + '</div>' +
               '<div class="profile-meta">Current temp: ' + currentTempText + ' | Raw sensor: ' + rawTempText + ' | Correction: ' + correctionText + ' | Current power: ' + currentPowerText + '</div>' +
+              (measurementErrors ? '<div class="profile-meta" style="color:#9e3c3c;">Measurement unavailable: ' + measurementErrors + '</div>' : '') +
               '<div class="profile-meta">Hours since target: ' + hoursText + ' | Heater now: <strong style="color:' + onColor + ';">' + onText + '</strong></div>' +
               '<div class="profile-meta">Plan window: ' + windowText + '</div>' +
               (controlError ? '<div class="profile-meta" style="color:#9e3c3c;">Control error' + (controlErrorAt ? ' (' + controlErrorAt + ')' : '') + ': ' + controlError + '</div>' : '') +
@@ -1753,7 +1770,7 @@
                     controlCapabilityId: String(p.controlCapabilityId || '').trim() || 'onoff',
                     minTemp: Number(p.minTemp),
                     targetTemp: Number(p.targetTemp),
-                    lowTargetTemp: Number.isFinite(Number(p.lowTargetTemp)) ? Number(p.lowTargetTemp) : null,
+                    lowTargetTemp: validLowTarget(p.lowTargetTemp, Number(p.minTemp), Number(p.targetTemp)),
                     powerW: Number(p.powerW),
                     tankLiters: Number(p.tankLiters),
                     maxHoursSinceGoal: Number(p.maxHoursSinceGoal),

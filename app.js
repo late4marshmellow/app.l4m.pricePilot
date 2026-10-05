@@ -10,6 +10,37 @@ const NORDPOOL_PUBLISH_GRACE_MINUTES = 20;
 const NORDPOOL_MAX_CACHE_AGE_HOURS = 36;
 const POWER_GOAL_REACHED_MAX_WATTS = 0.5;
 const POWER_GOAL_REACHED_MIN_ON_MINUTES = 5;
+const TEMPERATURE_MIN_C = -50;
+const TEMPERATURE_MAX_C = 100;
+const TEMPERATURE_MAX_AGE_MS = 30 * 60 * 1000;
+const POWER_MIN_W = 0;
+const POWER_MAX_W = 100000;
+const POWER_MAX_AGE_MS = 5 * 60 * 1000;
+
+function optionalNumber(value) {
+  if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) return null;
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function readMeasuredValue(capability, label, min, max, maxAgeMs) {
+  const rawValue = capability && capability.value;
+  const value = optionalNumber(rawValue);
+  if (value === null) throw new Error(`${label} is unavailable or not numeric`);
+  if (value < min || value > max) throw new Error(`${label} is outside the plausible range`);
+
+  const timestamp = capability.lastUpdated !== undefined && capability.lastUpdated !== null
+    ? capability.lastUpdated
+    : capability.lastChanged;
+  if (timestamp !== undefined && timestamp !== null) {
+    const measuredAt = new Date(timestamp).getTime();
+    if (!Number.isFinite(measuredAt)) throw new Error(`${label} has an invalid update time`);
+    if (Date.now() - measuredAt > maxAgeMs) throw new Error(`${label} is stale`);
+  }
+
+  return value;
+}
 
 function isTemperatureCapability(capabilityId, cap) {
   const capLc = String(capabilityId || '').trim().toLowerCase();
@@ -339,7 +370,12 @@ module.exports = class PricePilotApp extends Homey.App {
 
     const targetTemp = Number(profile.targetTemp);
     const minTemp = Number(profile.minTemp);
-    const lowTargetTemp = Number.isFinite(Number(profile.lowTargetTemp)) ? Number(profile.lowTargetTemp) : NaN;
+    const configuredLowTarget = optionalNumber(profile.lowTargetTemp);
+    const lowTargetTemp = configuredLowTarget !== null
+      && configuredLowTarget > minTemp
+      && configuredLowTarget < targetTemp
+      ? configuredLowTarget
+      : NaN;
     const heatingRate = this._computeHeatingRatePerHour(profile.powerW, profile.tankLiters);
     const maxHoursSinceGoal = Number(profile.maxHoursSinceGoal);
     const currentTemp = await this._readCurrentTempFromProfile(profile);
@@ -657,7 +693,7 @@ module.exports = class PricePilotApp extends Homey.App {
         tempDeviceId: String(p.tempDeviceId || '').trim(),
         tempCapabilityId: String(p.tempCapabilityId || '').trim(),
         tempCorrection: Number.isFinite(Number(p.tempCorrection)) ? Number(p.tempCorrection) : 0,
-        lowTargetTemp: Number.isFinite(Number(p.lowTargetTemp)) ? Number(p.lowTargetTemp) : null,
+        lowTargetTemp: optionalNumber(p.lowTargetTemp),
         powerDeviceId: String(p.powerDeviceId || '').trim(),
         powerCapabilityId: String(p.powerCapabilityId || '').trim(),
         controlDeviceId: String(p.controlDeviceId || '').trim(),
@@ -674,6 +710,9 @@ module.exports = class PricePilotApp extends Homey.App {
       }))
       .filter((p) => {
         if (!p.id) return false;
+        if (p.lowTargetTemp !== null && !(p.lowTargetTemp > p.minTemp && p.lowTargetTemp < p.targetTemp)) {
+          p.lowTargetTemp = null;
+        }
         if (p.controlMode === 'fixed_window') {
           const hasValidWindow = this._isValidClockTime(p.fixedWindowStart)
             && this._isValidClockTime(p.fixedWindowEnd)
@@ -1174,9 +1213,25 @@ module.exports = class PricePilotApp extends Homey.App {
       throw new Error(`Capability "${profile.tempCapabilityId}" not found on "${device.name}"`);
     }
 
-    const value = Number(cap.value);
-    if (!Number.isFinite(value)) {
-      throw new Error(`Capability "${profile.tempCapabilityId}" on "${device.name}" is not numeric`);
+    let value;
+    try {
+      value = readMeasuredValue(
+        cap,
+        `Temperature capability "${profile.tempCapabilityId}" on "${device.name}"`,
+        TEMPERATURE_MIN_C,
+        TEMPERATURE_MAX_C,
+        TEMPERATURE_MAX_AGE_MS
+      );
+    } catch (err) {
+      this._patchRuntime(profile.id, {
+        currentTemp: null,
+        sensorRawTemp: null,
+        temperatureMeasurementAvailable: false,
+        temperatureMeasurementError: err.message,
+        temperatureMeasuredAt: null,
+        updatedAt: new Date().toISOString(),
+      });
+      throw err;
     }
 
     const correction = Number.isFinite(Number(profile.tempCorrection)) ? Number(profile.tempCorrection) : 0;
@@ -1186,6 +1241,9 @@ module.exports = class PricePilotApp extends Homey.App {
       currentTemp: correctedValue,
       sensorRawTemp: value,
       tempCorrection: correction,
+      temperatureMeasurementAvailable: true,
+      temperatureMeasurementError: null,
+      temperatureMeasuredAt: cap.lastUpdated || cap.lastChanged || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
 
@@ -1208,15 +1266,33 @@ module.exports = class PricePilotApp extends Homey.App {
       throw new Error(`Power capability "${profile.powerCapabilityId}" not found on "${device.name}"`);
     }
 
-    const value = Number(cap.value);
-    if (!Number.isFinite(value)) {
-      throw new Error(`Power capability "${profile.powerCapabilityId}" on "${device.name}" is not numeric`);
+    let value;
+    try {
+      value = readMeasuredValue(
+        cap,
+        `Power capability "${profile.powerCapabilityId}" on "${device.name}"`,
+        POWER_MIN_W,
+        POWER_MAX_W,
+        POWER_MAX_AGE_MS
+      );
+    } catch (err) {
+      this._patchRuntime(profile.id, {
+        currentPowerW: null,
+        powerMeasurementAvailable: false,
+        powerMeasurementError: err.message,
+        powerMeasuredAt: null,
+        updatedAt: new Date().toISOString(),
+      });
+      throw err;
     }
 
     this._patchRuntime(profile.id, {
       currentPowerW: value,
       powerDeviceId: profile.powerDeviceId,
       powerCapabilityId: profile.powerCapabilityId,
+      powerMeasurementAvailable: true,
+      powerMeasurementError: null,
+      powerMeasuredAt: cap.lastUpdated || cap.lastChanged || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
 
